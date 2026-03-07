@@ -197,6 +197,26 @@ function statCard(value, label, cls) {
         '</div><div class="stat-label">' + label + '</div></div>';
 }
 
+function formatStepDuration(step) {
+    if (!step || !step.createdAt || !step.updatedAt) return '-';
+    var start = new Date(step.createdAt).getTime();
+    var end = new Date(step.updatedAt).getTime();
+    var diffMs = end - start;
+    if (diffMs < 0) return '-';
+    var secs = Math.round(diffMs / 1000);
+    if (secs < 60) return secs + 's';
+    var mins = Math.floor(secs / 60);
+    secs = secs % 60;
+    return mins + 'm ' + secs + 's';
+}
+
+function getStepStatusIcon(status) {
+    if (status === 'completed') return '<span class="step-status-dot completed"></span>';
+    if (status === 'failed') return '<span class="step-status-dot failed"></span>';
+    if (status === 'in_progress') return '<span class="step-status-dot in_progress"></span>';
+    return '<span class="step-status-dot pending"></span>';
+}
+
 function loadHistory() {
     fetch('/api/migrations')
         .then(function(res) { return res.json(); })
@@ -206,19 +226,86 @@ function loadHistory() {
                 container.innerHTML = '<p class="empty-state">No migrations yet. Start a new migration to see results here.</p>';
                 return;
             }
+
+            var stepLabels = {
+                clone: 'Clone Repository',
+                analyze: 'Analyze Project',
+                configure: 'Configure OpenRewrite',
+                migrate: 'Apply Migration',
+                report: 'Generate Report'
+            };
+            var allStepKeys = ['clone', 'analyze', 'configure', 'migrate', 'report'];
+
             var html = '';
             for (var i = 0; i < migrations.length; i++) {
                 var m = migrations[i];
                 var date = new Date(m.createdAt).toLocaleString();
                 var repoName = m.repoUrl.split('/').pop().replace('.git', '');
-                html += '<div class="history-item" onclick="viewMigration(\'' + m.id + '\')">' +
-                    '<div class="history-info"><h3>' + repoName + '</h3><p>' + m.repoUrl + ' - ' + m.branch + '</p></div>' +
-                    '<div class="history-meta"><span class="history-date">' + date + '</span>' +
-                    '<span class="status-badge ' + m.status + '">' + m.status.replace('_', ' ') + '</span></div></div>';
+                var totalTime = m.totalTimeTaken || '-';
+                var javaFiles = m.totalJavaFiles || 0;
+                var modules = m.totalModules || 0;
+                var issues = m.totalIssues || 0;
+
+                html += '<div class="history-card">';
+                html += '<div class="history-card-header" onclick="toggleHistoryDetail(\'' + m.id + '\')">';
+                html += '<div class="history-info"><h3>' + repoName + '</h3>';
+                html += '<p>' + m.repoUrl + ' &mdash; branch: <strong>' + m.branch + '</strong></p></div>';
+                html += '<div class="history-meta">';
+                html += '<div class="history-stats">';
+                html += '<span class="history-stat" title="Total Time"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> ' + totalTime + '</span>';
+                html += '<span class="history-stat" title="Modules">' + modules + ' module' + (modules !== 1 ? 's' : '') + '</span>';
+                html += '<span class="history-stat" title="Java Files">' + javaFiles + ' files</span>';
+                if (issues > 0) {
+                    html += '<span class="history-stat issues" title="Issues Found">' + issues + ' issue' + (issues !== 1 ? 's' : '') + '</span>';
+                }
+                html += '</div>';
+                html += '<span class="history-date">' + date + '</span>';
+                html += '<span class="status-badge ' + m.status + '">' + m.status.replace('_', ' ') + '</span>';
+                html += '</div></div>';
+
+                html += '<div class="history-detail" id="history-detail-' + m.id + '" style="display:none">';
+                html += '<table class="timing-table"><thead><tr>';
+                html += '<th>Step</th><th>Status</th><th>Time Taken</th><th>Details</th>';
+                html += '</tr></thead><tbody>';
+
+                for (var j = 0; j < allStepKeys.length; j++) {
+                    var key = allStepKeys[j];
+                    var step = null;
+                    if (m.steps) {
+                        for (var k = 0; k < m.steps.length; k++) {
+                            if (m.steps[k].name === key) { step = m.steps[k]; break; }
+                        }
+                    }
+                    var status = step ? step.status : 'pending';
+                    var msg = step ? step.message : '-';
+                    var duration = (status === 'completed' || status === 'failed') ? formatStepDuration(step) : '-';
+
+                    html += '<tr>';
+                    html += '<td class="step-name-cell">' + stepLabels[key] + '</td>';
+                    html += '<td>' + getStepStatusIcon(status) + ' <span class="step-status-text ' + status + '">' + status.replace('_', ' ') + '</span></td>';
+                    html += '<td class="duration-cell">' + duration + '</td>';
+                    html += '<td class="message-cell">' + msg + '</td>';
+                    html += '</tr>';
+                }
+
+                html += '</tbody></table>';
+
+                html += '<div class="history-actions">';
+                html += '<button class="btn btn-primary btn-sm" onclick="viewMigration(\'' + m.id + '\')">View Full Report</button>';
+                html += '</div>';
+                html += '</div>';
+                html += '</div>';
             }
             container.innerHTML = html;
         })
         .catch(function(err) { console.error('Failed to load history:', err); });
+}
+
+function toggleHistoryDetail(id) {
+    var el = document.getElementById('history-detail-' + id);
+    if (el) {
+        el.style.display = el.style.display === 'none' ? 'block' : 'none';
+    }
 }
 
 function viewMigration(id) {

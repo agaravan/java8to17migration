@@ -1,5 +1,6 @@
 package com.migration.model;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -11,6 +12,7 @@ public class MigrationJob {
     private String branch;
     private String status;
     private Instant createdAt;
+    private Instant completedAt;
     private List<MigrationStep> steps;
     private Map<String, Object> report;
     private String error;
@@ -28,13 +30,70 @@ public class MigrationJob {
     public String getRepoUrl() { return repoUrl; }
     public String getBranch() { return branch; }
     public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
+    public void setStatus(String status) {
+        this.status = status;
+        if ("completed".equals(status) || "failed".equals(status)) {
+            this.completedAt = Instant.now();
+        }
+    }
     public Instant getCreatedAt() { return createdAt; }
+    public Instant getCompletedAt() { return completedAt; }
     public List<MigrationStep> getSteps() { return steps; }
     public Map<String, Object> getReport() { return report; }
     public void setReport(Map<String, Object> report) { this.report = report; }
     public String getError() { return error; }
     public void setError(String error) { this.error = error; }
+
+    public String getTotalTimeTaken() {
+        if (completedAt == null) {
+            if ("in_progress".equals(status) || "queued".equals(status)) {
+                return formatDuration(Duration.between(createdAt, Instant.now()));
+            }
+            return "-";
+        }
+        return formatDuration(Duration.between(createdAt, completedAt));
+    }
+
+    public int getTotalJavaFiles() {
+        if (report != null && report.get("summary") instanceof Map) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> summary = (Map<String, Object>) report.get("summary");
+            Object val = summary.get("totalJavaFiles");
+            if (val instanceof Number) return ((Number) val).intValue();
+        }
+        return 0;
+    }
+
+    public int getTotalIssues() {
+        if (report != null && report.get("summary") instanceof Map) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> summary = (Map<String, Object>) report.get("summary");
+            Object val = summary.get("totalIssuesFound");
+            if (val instanceof Number) return ((Number) val).intValue();
+        }
+        return 0;
+    }
+
+    public int getTotalModules() {
+        if (report != null && report.get("summary") instanceof Map) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> summary = (Map<String, Object>) report.get("summary");
+            Object val = summary.get("totalModules");
+            if (val instanceof Number) return ((Number) val).intValue();
+        }
+        return 0;
+    }
+
+    private String formatDuration(Duration d) {
+        long totalSecs = d.getSeconds();
+        if (totalSecs < 60) return totalSecs + "s";
+        long mins = totalSecs / 60;
+        long secs = totalSecs % 60;
+        if (mins < 60) return mins + "m " + secs + "s";
+        long hours = mins / 60;
+        mins = mins % 60;
+        return hours + "h " + mins + "m " + secs + "s";
+    }
 
     public void updateStep(String stepName, String status, String message) {
         MigrationStep existing = steps.stream()
@@ -48,6 +107,7 @@ public class MigrationJob {
         }
         if ("failed".equals(status)) {
             this.status = "failed";
+            this.completedAt = Instant.now();
         } else {
             this.status = "in_progress";
         }
