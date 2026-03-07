@@ -400,17 +400,9 @@ main {
     color: var(--primary);
 }
 
-.stat-value.high {
-    color: var(--error);
-}
-
-.stat-value.medium {
-    color: var(--warning);
-}
-
-.stat-value.low {
-    color: var(--success);
-}
+.stat-value.high { color: var(--error); }
+.stat-value.medium { color: var(--warning); }
+.stat-value.low { color: var(--success); }
 
 .stat-label {
     font-size: 12px;
@@ -436,17 +428,9 @@ main {
     flex-shrink: 0;
 }
 
-.issue-severity.high {
-    background: var(--error);
-}
-
-.issue-severity.medium {
-    background: var(--warning);
-}
-
-.issue-severity.low {
-    background: var(--success);
-}
+.issue-severity.high { background: var(--error); }
+.issue-severity.medium { background: var(--warning); }
+.issue-severity.low { background: var(--success); }
 
 .issue-content h4 {
     font-size: 13px;
@@ -488,20 +472,9 @@ main {
     height: fit-content;
 }
 
-.rec-priority.critical {
-    background: var(--error-light);
-    color: var(--error);
-}
-
-.rec-priority.high {
-    background: var(--warning-light);
-    color: var(--warning);
-}
-
-.rec-priority.medium {
-    background: var(--primary-light);
-    color: var(--primary);
-}
+.rec-priority.critical { background: var(--error-light); color: var(--error); }
+.rec-priority.high { background: var(--warning-light); color: var(--warning); }
+.rec-priority.medium { background: var(--primary-light); color: var(--primary); }
 
 .next-steps-list {
     list-style: none;
@@ -518,19 +491,10 @@ main {
     gap: 8px;
 }
 
-.next-steps-list li:last-child {
-    border-bottom: none;
-}
+.next-steps-list li:last-child { border-bottom: none; }
+.next-steps-list li::before { content: '\2192'; color: var(--primary); font-weight: 700; }
 
-.next-steps-list li::before {
-    content: '\2192';
-    color: var(--primary);
-    font-weight: 700;
-}
-
-.history-container {
-    padding: 24px;
-}
+.history-container { padding: 24px; }
 
 .history-item {
     display: flex;
@@ -544,22 +508,9 @@ main {
     transition: all 0.15s;
 }
 
-.history-item:hover {
-    border-color: var(--primary);
-    background: var(--gray-50);
-}
-
-.history-info h3 {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--gray-800);
-}
-
-.history-info p {
-    font-size: 12px;
-    color: var(--gray-500);
-    margin-top: 2px;
-}
+.history-item:hover { border-color: var(--primary); background: var(--gray-50); }
+.history-info h3 { font-size: 14px; font-weight: 600; color: var(--gray-800); }
+.history-info p { font-size: 12px; color: var(--gray-500); margin-top: 2px; }
 
 .history-meta {
     text-align: right;
@@ -568,14 +519,8 @@ main {
     gap: 12px;
 }
 
-.history-date {
-    font-size: 12px;
-    color: var(--gray-400);
-}
-
-.recipes-container {
-    padding: 24px;
-}
+.history-date { font-size: 12px; color: var(--gray-400); }
+.recipes-container { padding: 24px; }
 
 .recipe-card {
     padding: 16px;
@@ -584,9 +529,7 @@ main {
     margin-bottom: 8px;
 }
 
-.recipe-card.required {
-    border-left: 3px solid var(--primary);
-}
+.recipe-card.required { border-left: 3px solid var(--primary); }
 
 .recipe-header {
     display: flex;
@@ -595,11 +538,7 @@ main {
     margin-bottom: 8px;
 }
 
-.recipe-header h3 {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--gray-800);
-}
+.recipe-header h3 { font-size: 14px; font-weight: 600; color: var(--gray-800); }
 
 .recipe-tag {
     padding: 2px 8px;
@@ -609,21 +548,9 @@ main {
     text-transform: uppercase;
 }
 
-.recipe-tag.required {
-    background: var(--primary-light);
-    color: var(--primary);
-}
-
-.recipe-tag.optional {
-    background: var(--gray-100);
-    color: var(--gray-500);
-}
-
-.recipe-card p {
-    font-size: 13px;
-    color: var(--gray-600);
-    margin-bottom: 6px;
-}
+.recipe-tag.required { background: var(--primary-light); color: var(--primary); }
+.recipe-tag.optional { background: var(--gray-100); color: var(--gray-500); }
+.recipe-card p { font-size: 13px; color: var(--gray-600); margin-bottom: 6px; }
 
 .recipe-card code {
     font-size: 12px;
@@ -634,9 +561,7 @@ main {
     display: inline-block;
 }
 
-.strategy-content {
-    padding: 24px;
-}
+.strategy-content { padding: 24px; }
 
 .strategy-step {
     display: flex;
@@ -645,9 +570,7 @@ main {
     border-bottom: 1px solid var(--gray-100);
 }
 
-.strategy-step:last-child {
-    border-bottom: none;
-}
+.strategy-step:last-child { border-bottom: none; }
 
 .step-number {
     width: 36px;
@@ -662,17 +585,8 @@ main {
     flex-shrink: 0;
 }
 
-.strategy-step h3 {
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--gray-800);
-    margin-bottom: 4px;
-}
-
-.strategy-step p {
-    font-size: 13px;
-    color: var(--gray-600);
-}
+.strategy-step h3 { font-size: 14px; font-weight: 600; color: var(--gray-800); margin-bottom: 4px; }
+.strategy-step p { font-size: 13px; color: var(--gray-600); }
 
 .strategy-step code {
     font-size: 12px;
@@ -681,17 +595,9 @@ main {
     border-radius: 4px;
 }
 
-.empty-state {
-    text-align: center;
-    color: var(--gray-400);
-    padding: 40px 0;
-    font-size: 14px;
-}
+.empty-state { text-align: center; color: var(--gray-400); padding: 40px 0; font-size: 14px; }
 
-.changes-list {
-    list-style: none;
-    padding: 0;
-}
+.changes-list { list-style: none; padding: 0; }
 
 .changes-list li {
     padding: 6px 0;
@@ -702,11 +608,7 @@ main {
     gap: 8px;
 }
 
-.changes-list li::before {
-    content: '\2713';
-    color: var(--success);
-    font-weight: 700;
-}
+.changes-list li::before { content: '\2713'; color: var(--success); font-weight: 700; }
 
 .warning-item {
     padding: 12px;
@@ -719,27 +621,9 @@ main {
 }
 
 @media (max-width: 768px) {
-    .header-content {
-        flex-direction: column;
-        gap: 12px;
-    }
-
-    nav {
-        width: 100%;
-        overflow-x: auto;
-    }
-
-    .form-row {
-        flex-direction: column;
-    }
-
-    .stats-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-
-    .history-item {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 8px;
-    }
+    .header-content { flex-direction: column; gap: 12px; }
+    nav { width: 100%; overflow-x: auto; }
+    .form-row { flex-direction: column; }
+    .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    .history-item { flex-direction: column; align-items: flex-start; gap: 8px; }
 }

@@ -1,4 +1,7 @@
-node_modules/
+target/
 workspace/
 *.log
 .env
+*.class
+*.jar
+!src/main/resources/static/**

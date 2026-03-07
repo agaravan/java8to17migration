@@ -1,46 +1,57 @@
 # Java Migration Service
 
 ## Overview
-A web-based service that automates the migration of Java projects from OpenJDK 8 to OpenJDK 17.0.2 using OpenRewrite recipes. Similar to Amazon Q's migration capabilities.
+A pure Java (Spring Boot) web service that automates the migration of Java Maven projects from OpenJDK 8 to OpenJDK 17.0.2 using OpenRewrite recipes. Built to run as a Windows service.
 
 ## Architecture
-- **Backend**: Node.js + Express (port 5000)
-- **Frontend**: Vanilla HTML/CSS/JS (served from `public/`)
-- **Migration Engine**: OpenRewrite Maven Plugin (`org.openrewrite.maven:rewrite-maven-plugin`)
+- **Backend**: Java Spring Boot 3.2.5 (embedded Tomcat, port 5000)
+- **Frontend**: Static HTML/CSS/JS served from Spring Boot classpath
+- **Build**: Maven (`mvn clean package -DskipTests`)
+- **Run**: `java -jar target/java-migration-service-1.0.0.jar`
 
 ## Project Structure
 ```
-server.js              - Express server, API routes, migration orchestration
-services/
-  gitService.js        - Git clone/branch operations via simple-git
-  migrationService.js  - Project analysis, OpenRewrite config, migration logic
-public/
-  index.html           - Main UI (SPA with 3 views)
-  css/styles.css       - Styling
-  js/app.js            - Frontend logic (polling, rendering)
-workspace/             - Temporary directory for cloned repos (gitignored)
+pom.xml
+src/main/java/com/migration/
+  MigrationApplication.java          - Spring Boot entry point
+  controller/
+    MigrationController.java         - REST API endpoints
+  model/
+    MigrationJob.java                - Migration job state
+    MigrationRequest.java            - API request DTO
+    MigrationStep.java               - Step tracking
+    Recipe.java                      - OpenRewrite recipe info
+  service/
+    MigrationOrchestrator.java       - Orchestrates the migration pipeline
+    GitService.java                  - JGit-based repo cloning
+    AnalysisService.java             - Pom.xml + Java source analysis
+    RewriteConfigService.java        - OpenRewrite plugin injection
+    MigrationExecutorService.java    - Maven execution + report generation
+src/main/resources/
+  application.properties             - Server config
+  static/                            - Frontend (index.html, css/, js/)
 ```
 
-## Key Features
-1. **Repository Input**: Bitbucket URL + branch (feature/develop) with optional auth
-2. **Project Analysis**: Scans pom.xml files, detects dependencies (Lombok, JAXB, JAX-WS, Spring)
-3. **Java Source Scanning**: Identifies deprecated APIs, removed modules, reflection issues
-4. **OpenRewrite Configuration**: Auto-injects rewrite-maven-plugin with appropriate recipes
-5. **Migration Report**: Summary stats, issues by severity, recommendations, next steps
+## Key Dependencies
+- Spring Boot 3.2.5 (web starter)
+- JGit 6.9.0 (Git operations)
+- Jackson (JSON + XML processing)
+- OpenRewrite Maven Plugin 5.42.2 (injected into target projects)
+- rewrite-migrate-java 2.25.0 (recipe library)
 
-## OpenRewrite Recipes Used
-- `org.openrewrite.java.migrate.UpgradeToJava17` (core)
-- `org.openrewrite.java.migrate.JavaVersion17` (compiler settings)
-- `org.openrewrite.java.migrate.javax.AddJaxbDependencies` (conditional)
-- `org.openrewrite.java.migrate.javax.AddJaxwsDependencies` (conditional)
-- `org.openrewrite.java.migrate.lombok.UpdateLombokToJava17` (conditional)
+## API Endpoints
+- POST /api/migrations - Start a migration
+- GET /api/migrations - List all migrations
+- GET /api/migrations/{id} - Get migration status
+- GET /api/migrations/{id}/report - Get migration report
+- GET /api/recipes - List available recipes
+- GET /api/health - Health check
 
-## Dependencies
-- express, express-session, uuid, simple-git, xml2js, archiver, glob
-- System: git, maven
-
-## Running
-```
-node server.js
-```
-Runs on port 5000.
+## Migration Pipeline
+1. Clone repo via JGit (supports Bitbucket auth)
+2. Analyze pom.xml (detect JDK version, dependencies)
+3. Scan Java files (JAXB, JAX-WS, Nashorn, reflection, deprecated APIs)
+4. Inject OpenRewrite plugin + configure recipes
+5. Run mvn rewrite:run
+6. Generate migration report
+7. Cleanup cloned repo
