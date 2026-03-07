@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Java Migration Service - JDK 8 to 17</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <header>
+        <div class="header-content">
+            <div class="logo">
+                <div class="logo-icon">JM</div>
+                <div>
+                    <h1>Java Migration Service</h1>
+                    <p class="subtitle">OpenJDK 8 &rarr; OpenJDK 17.0.2</p>
+                </div>
+            </div>
+            <nav>
+                <button class="nav-btn active" data-view="migrate" onclick="showView('migrate')">New Migration</button>
+                <button class="nav-btn" data-view="history" onclick="showView('history')">History</button>
+                <button class="nav-btn" data-view="recipes" onclick="showView('recipes')">Recipes</button>
+            </nav>
+        </div>
+    </header>
+
+    <main>
+        <section id="migrate-view" class="view active">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Start New Migration</h2>
+                    <p>Provide the Bitbucket repository details to begin migrating from OpenJDK 8 to 17.0.2</p>
+                </div>
+                <form id="migration-form" onsubmit="startMigration(event)">
+                    <div class="form-group">
+                        <label for="repo-url">Bitbucket Repository URL</label>
+                        <input type="url" id="repo-url" placeholder="https://bitbucket.org/your-org/your-project.git" required>
+                        <span class="hint">HTTPS clone URL of your Bitbucket repository</span>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group flex-1">
+                            <label for="branch">Branch</label>
+                            <input type="text" id="branch" placeholder="develop" value="develop" required>
+                            <span class="hint">Feature or develop branch to migrate</span>
+                        </div>
+                    </div>
+                    <details class="credentials-section">
+                        <summary>Authentication (Optional)</summary>
+                        <div class="form-row">
+                            <div class="form-group flex-1">
+                                <label for="username">Username</label>
+                                <input type="text" id="username" placeholder="bitbucket-username">
+                            </div>
+                            <div class="form-group flex-1">
+                                <label for="password">App Password / Token</label>
+                                <input type="password" id="password" placeholder="app-password-or-token">
+                            </div>
+                        </div>
+                    </details>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary" id="submit-btn">
+                            <span class="btn-text">Start Migration</span>
+                            <span class="btn-loading" style="display:none">Processing...</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <div id="migration-progress" class="card" style="display:none">
+                <div class="card-header">
+                    <h2>Migration Progress</h2>
+                    <span id="migration-status" class="status-badge">In Progress</span>
+                </div>
+                <div id="progress-steps" class="steps-container"></div>
+            </div>
+
+            <div id="migration-report" class="card" style="display:none">
+                <div class="card-header">
+                    <h2>Migration Report</h2>
+                </div>
+                <div id="report-content"></div>
+            </div>
+        </section>
+
+        <section id="history-view" class="view">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Migration History</h2>
+                </div>
+                <div id="history-list" class="history-container">
+                    <p class="empty-state">No migrations yet. Start a new migration to see results here.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="recipes-view" class="view">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Available OpenRewrite Recipes</h2>
+                    <p>These recipes are automatically applied during migration based on project analysis</p>
+                </div>
+                <div id="recipes-list" class="recipes-container"></div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h2>Migration Strategy</h2>
+                </div>
+                <div class="strategy-content">
+                    <div class="strategy-step">
+                        <div class="step-number">1</div>
+                        <div>
+                            <h3>Clone & Analyze</h3>
+                            <p>Clone the repository and analyze pom.xml files, Java source code, and dependency tree for compatibility issues.</p>
+                        </div>
+                    </div>
+                    <div class="strategy-step">
+                        <div class="step-number">2</div>
+                        <div>
+                            <h3>Configure OpenRewrite</h3>
+                            <p>Inject the OpenRewrite Maven plugin with appropriate recipes based on project analysis (JAXB, Lombok, Spring, etc.).</p>
+                        </div>
+                    </div>
+                    <div class="strategy-step">
+                        <div class="step-number">3</div>
+                        <div>
+                            <h3>Apply Recipes</h3>
+                            <p>Execute <code>org.openrewrite.java.migrate.UpgradeToJava17</code> and supporting recipes to transform source code and build files.</p>
+                        </div>
+                    </div>
+                    <div class="strategy-step">
+                        <div class="step-number">4</div>
+                        <div>
+                            <h3>Report & Review</h3>
+                            <p>Generate a comprehensive migration report with issues found, changes made, and manual steps remaining.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script src="/js/app.js"></script>
+</body>
+</html>
