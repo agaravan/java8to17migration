@@ -35,13 +35,16 @@ public class MigrationOrchestrator {
         this.executorService = executorService;
     }
 
-    public MigrationJob startMigration(String repoUrl, String branch, String username, String password) {
+    public MigrationJob startMigration(String repoUrl, String branch, String username, String password,
+                                        boolean pushToNewBranch, String targetBranchName) {
         if (activeMigrations.get() >= maxConcurrent) {
             throw new IllegalStateException("Maximum " + maxConcurrent + " concurrent migrations allowed. Please wait.");
         }
 
         String id = UUID.randomUUID().toString();
         MigrationJob job = new MigrationJob(id, repoUrl, branch);
+        job.setPushToNewBranch(pushToNewBranch);
+        job.setTargetBranchName(targetBranchName);
         migrations.put(id, job);
 
         threadPool.submit(() -> processMigration(job, username, password));
@@ -55,7 +58,8 @@ public class MigrationOrchestrator {
 
         try {
             job.updateStep("clone", "in_progress", "Cloning repository...");
-            clonePath = gitService.cloneRepo(job.getRepoUrl(), job.getBranch(), job.getId(), username, password);
+            boolean fullClone = job.isPushToNewBranch();
+            clonePath = gitService.cloneRepo(job.getRepoUrl(), job.getBranch(), job.getId(), username, password, fullClone);
             job.updateStep("clone", "completed", "Repository cloned successfully");
 
             job.updateStep("analyze", "in_progress", "Analyzing project structure...");
@@ -80,6 +84,24 @@ public class MigrationOrchestrator {
             Map<String, Object> report = executorService.generateReport(clonePath, analysis, result);
             job.setReport(report);
             job.updateStep("report", "completed", "Migration report generated");
+
+            if (job.isPushToNewBranch()) {
+                try {
+                    job.updateStep("push", "in_progress", "Pushing migrated code to new branch...");
+                    Map<String, Object> pushResult = gitService.commitAndPush(
+                            clonePath, job.getTargetBranchName(), username, password);
+                    job.setPushResult(pushResult);
+                    boolean pushed = Boolean.TRUE.equals(pushResult.get("pushed"));
+                    String pushMsg = (String) pushResult.get("message");
+                    job.updateStep("push", pushed ? "completed" : "warning", pushMsg);
+                } catch (Exception pushEx) {
+                    Map<String, Object> failResult = new LinkedHashMap<>();
+                    failResult.put("pushed", false);
+                    failResult.put("message", "Push failed: " + pushEx.getMessage());
+                    job.setPushResult(failResult);
+                    job.updateStep("push", "warning", "Push failed: " + pushEx.getMessage());
+                }
+            }
 
             job.setStatus("completed");
 

@@ -26,9 +26,24 @@ function startMigration(e) {
     submitBtn.querySelector('.btn-text').style.display = 'none';
     submitBtn.querySelector('.btn-loading').style.display = 'inline';
 
+    var pushToNewBranch = document.getElementById('push-to-branch').checked;
+    var targetBranchName = document.getElementById('target-branch').value.trim();
+
+    if (pushToNewBranch && !username && !password) {
+        alert('Authentication is required when pushing to a new branch. Please provide credentials.');
+        submitBtn.disabled = false;
+        submitBtn.querySelector('.btn-text').style.display = 'inline';
+        submitBtn.querySelector('.btn-loading').style.display = 'none';
+        return;
+    }
+
     var body = { repoUrl: repoUrl, branch: branch };
     if (username) body.username = username;
     if (password) body.password = password;
+    if (pushToNewBranch) {
+        body.pushToNewBranch = true;
+        if (targetBranchName) body.targetBranchName = targetBranchName;
+    }
 
     fetch('/api/migrations', {
         method: 'POST',
@@ -69,7 +84,7 @@ function pollMigration(migrationId) {
                 clearInterval(pollingInterval);
                 pollingInterval = null;
                 if (migration.status === 'completed' && migration.report) {
-                    showReport(migration.report);
+                    showReport(migration.report, migration.pushResult);
                 }
             }
         })
@@ -87,10 +102,13 @@ function updateProgressUI(migration) {
         analyze: 'Analyze Project',
         configure: 'Configure OpenRewrite',
         migrate: 'Apply Migration',
-        report: 'Generate Report'
+        report: 'Generate Report',
+        push: 'Push to New Branch'
     };
-    var stepIcons = { pending: '\u25CB', in_progress: '\u25CF', completed: '\u2713', failed: '\u2717' };
+    var stepIcons = { pending: '\u25CB', in_progress: '\u25CF', completed: '\u2713', failed: '\u2717', warning: '\u26A0' };
     var allSteps = ['clone', 'analyze', 'configure', 'migrate', 'report'];
+    var hasPushStep = migration.steps && migration.steps.some(function(s) { return s.name === 'push'; });
+    if (hasPushStep || migration.pushToNewBranch) allSteps.push('push');
     var html = '';
 
     for (var i = 0; i < allSteps.length; i++) {
@@ -110,7 +128,7 @@ function updateProgressUI(migration) {
     stepsContainer.innerHTML = html;
 }
 
-function showReport(report) {
+function showReport(report, pushResult) {
     document.getElementById('migration-report').style.display = 'block';
     var container = document.getElementById('report-content');
     var html = '';
@@ -189,7 +207,24 @@ function showReport(report) {
     }
     html += '</div></div>';
 
+    if (pushResult) {
+        var pr = pushResult;
+        html += '<div class="report-section"><h3>Push Result</h3>';
+        html += '<div class="push-info ' + (pr.pushed ? 'success' : 'warning') + '">';
+        html += '<strong>' + (pr.pushed ? 'Successfully pushed to: ' : 'Push status: ') + '</strong>';
+        html += '<code>' + escapeHtml(pr.branch || '') + '</code>';
+        if (pr.changedFiles) html += ' (' + pr.changedFiles + ' files changed)';
+        html += '<p style="margin-top:6px;font-size:12px">' + escapeHtml(pr.message || '') + '</p>';
+        html += '</div></div>';
+    }
+
     container.innerHTML = html;
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 function statCard(value, label, cls) {
@@ -232,9 +267,10 @@ function loadHistory() {
                 analyze: 'Analyze Project',
                 configure: 'Configure OpenRewrite',
                 migrate: 'Apply Migration',
-                report: 'Generate Report'
+                report: 'Generate Report',
+                push: 'Push to New Branch'
             };
-            var allStepKeys = ['clone', 'analyze', 'configure', 'migrate', 'report'];
+            var defaultStepKeys = ['clone', 'analyze', 'configure', 'migrate', 'report'];
 
             var html = '';
             for (var i = 0; i < migrations.length; i++) {
@@ -268,6 +304,10 @@ function loadHistory() {
                 html += '<th>Step</th><th>Status</th><th>Time Taken</th><th>Details</th>';
                 html += '</tr></thead><tbody>';
 
+                var allStepKeys = defaultStepKeys.slice();
+                var hasPush = m.steps && m.steps.some(function(s) { return s.name === 'push'; });
+                if (hasPush || m.pushToNewBranch) allStepKeys.push('push');
+
                 for (var j = 0; j < allStepKeys.length; j++) {
                     var key = allStepKeys[j];
                     var step = null;
@@ -289,6 +329,18 @@ function loadHistory() {
                 }
 
                 html += '</tbody></table>';
+
+                if (m.pushResult) {
+                    var pushed = m.pushResult.pushed;
+                    var pushBranch = escapeHtml(m.pushResult.branch || '');
+                    var pushMsg = escapeHtml(m.pushResult.message || '');
+                    html += '<div class="push-info' + (pushed ? ' success' : ' warning') + '">';
+                    html += '<strong>' + (pushed ? 'Pushed to branch: ' : 'Push status: ') + '</strong>';
+                    html += '<code>' + pushBranch + '</code>';
+                    if (m.pushResult.changedFiles) html += ' (' + m.pushResult.changedFiles + ' files changed)';
+                    if (pushMsg) html += '<p style="margin-top:4px;font-size:12px">' + pushMsg + '</p>';
+                    html += '</div>';
+                }
 
                 html += '<div class="history-actions">';
                 html += '<button class="btn btn-primary btn-sm" onclick="viewMigration(\'' + m.id + '\')">View Full Report</button>';
@@ -318,7 +370,7 @@ function viewMigration(id) {
         .then(function(migration) {
             updateProgressUI(migration);
             if (migration.status === 'completed' && migration.report) {
-                showReport(migration.report);
+                showReport(migration.report, migration.pushResult);
             } else if (migration.status === 'in_progress') {
                 startPolling(id);
             }
@@ -343,6 +395,15 @@ function loadRecipes() {
             container.innerHTML = html;
         })
         .catch(function(err) { console.error('Failed to load recipes:', err); });
+}
+
+function toggleTargetBranch() {
+    var checked = document.getElementById('push-to-branch').checked;
+    document.getElementById('target-branch-group').style.display = checked ? 'block' : 'none';
+    var credSection = document.querySelector('.credentials-section');
+    if (checked) {
+        credSection.open = true;
+    }
 }
 
 loadRecipes();

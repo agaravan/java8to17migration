@@ -5,6 +5,8 @@ public class MigrationRequest {
     private String branch;
     private String username;
     private String password;
+    private boolean pushToNewBranch;
+    private String targetBranchName;
 
     public String getRepoUrl() { return repoUrl; }
     public void setRepoUrl(String repoUrl) { this.repoUrl = repoUrl; }
@@ -14,4 +16,8 @@ public class MigrationRequest {
     public void setUsername(String username) { this.username = username; }
     public String getPassword() { return password; }
     public void setPassword(String password) { this.password = password; }
+    public boolean isPushToNewBranch() { return pushToNewBranch; }
+    public void setPushToNewBranch(boolean pushToNewBranch) { this.pushToNewBranch = pushToNewBranch; }
+    public String getTargetBranchName() { return targetBranchName; }
+    public void setTargetBranchName(String targetBranchName) { this.targetBranchName = targetBranchName; }
 }

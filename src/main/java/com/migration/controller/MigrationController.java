@@ -38,10 +38,19 @@ public class MigrationController {
             return ResponseEntity.badRequest().body(Map.of("error", "Branch is required"));
         }
 
+        if (request.isPushToNewBranch()) {
+            if (request.getUsername() == null || request.getUsername().isBlank()
+                    || request.getPassword() == null || request.getPassword().isBlank()) {
+                return ResponseEntity.badRequest().body(
+                        Map.of("error", "Authentication (username and password/token) is required when pushing to a new branch"));
+            }
+        }
+
         try {
             MigrationJob job = orchestrator.startMigration(
                     request.getRepoUrl(), request.getBranch(),
-                    request.getUsername(), request.getPassword());
+                    request.getUsername(), request.getPassword(),
+                    request.isPushToNewBranch(), request.getTargetBranchName());
 
             Map<String, Object> response = new LinkedHashMap<>();
             response.put("migrationId", job.getId());

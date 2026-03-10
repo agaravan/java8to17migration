@@ -16,6 +16,9 @@ public class MigrationJob {
     private List<MigrationStep> steps;
     private Map<String, Object> report;
     private String error;
+    private boolean pushToNewBranch;
+    private String targetBranchName;
+    private Map<String, Object> pushResult;
 
     public MigrationJob(String id, String repoUrl, String branch) {
         this.id = id;
@@ -43,6 +46,12 @@ public class MigrationJob {
     public void setReport(Map<String, Object> report) { this.report = report; }
     public String getError() { return error; }
     public void setError(String error) { this.error = error; }
+    public boolean isPushToNewBranch() { return pushToNewBranch; }
+    public void setPushToNewBranch(boolean pushToNewBranch) { this.pushToNewBranch = pushToNewBranch; }
+    public String getTargetBranchName() { return targetBranchName; }
+    public void setTargetBranchName(String targetBranchName) { this.targetBranchName = targetBranchName; }
+    public Map<String, Object> getPushResult() { return pushResult; }
+    public void setPushResult(Map<String, Object> pushResult) { this.pushResult = pushResult; }
 
     public String getTotalTimeTaken() {
         if (completedAt == null) {

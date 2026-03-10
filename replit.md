@@ -17,13 +17,13 @@ src/main/java/com/migration/
   controller/
     MigrationController.java         - REST API endpoints
   model/
-    MigrationJob.java                - Migration job state
-    MigrationRequest.java            - API request DTO
+    MigrationJob.java                - Migration job state (with push tracking)
+    MigrationRequest.java            - API request DTO (pushToNewBranch, targetBranchName)
     MigrationStep.java               - Step tracking
     Recipe.java                      - OpenRewrite recipe info
   service/
     MigrationOrchestrator.java       - Orchestrates the migration pipeline
-    GitService.java                  - JGit-based repo cloning
+    GitService.java                  - JGit-based repo cloning + commit/push
     AnalysisService.java             - Pom.xml + Java source analysis
     RewriteConfigService.java        - OpenRewrite plugin injection
     MigrationExecutorService.java    - Maven execution + report generation
@@ -40,7 +40,7 @@ src/main/resources/
 - rewrite-migrate-java 2.25.0 (recipe library)
 
 ## API Endpoints
-- POST /api/migrations - Start a migration
+- POST /api/migrations - Start a migration (supports pushToNewBranch, targetBranchName)
 - GET /api/migrations - List all migrations
 - GET /api/migrations/{id} - Get migration status
 - GET /api/migrations/{id}/report - Get migration report
@@ -48,10 +48,27 @@ src/main/resources/
 - GET /api/health - Health check
 
 ## Migration Pipeline
-1. Clone repo via JGit (supports Bitbucket auth)
+1. Clone repo via JGit (shallow clone by default; full clone when push enabled)
 2. Analyze pom.xml (detect JDK version, dependencies)
 3. Scan Java files (JAXB, JAX-WS, Nashorn, reflection, deprecated APIs)
 4. Inject OpenRewrite plugin + configure recipes
 5. Run mvn rewrite:run
 6. Generate migration report
-7. Cleanup cloned repo
+7. (Optional) Commit and push changes to new branch (e.g., migration/jdk17-{timestamp})
+8. Cleanup cloned repo
+
+## Push to Branch Feature
+- When "Push migrated code to a new branch" is checked, the service:
+  - Does a full (non-shallow) clone to support push
+  - Creates a new branch (auto-named `migration/jdk17-{timestamp}` or user-specified)
+  - Commits all changes with a descriptive commit message
+  - Pushes to the remote origin
+  - Requires authentication (username + app password/token)
+- Push result is tracked in the migration job and displayed in both the progress UI and history
+
+## Development Notes
+- Static resources (HTML/CSS/JS) in `src/main/resources/static/` are served at runtime without recompile
+- Java source changes require: `mvn clean package -DskipTests` then restart workflow
+- History is in-memory only (no database; lost on restart)
+- Max 3 concurrent migrations (configurable in application.properties)
+- Cross-platform Maven execution: auto-selects mvn.cmd on Windows, mvn on Linux

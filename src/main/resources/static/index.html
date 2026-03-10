@@ -44,6 +44,18 @@
                             <span class="hint">Feature or develop branch to migrate</span>
                         </div>
                     </div>
+                    <div class="form-group push-option">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="push-to-branch" onchange="toggleTargetBranch()">
+                            <span>Push migrated code to a new branch</span>
+                        </label>
+                        <span class="hint">Commits and pushes changes to a new branch in the same repository (requires authentication)</span>
+                    </div>
+                    <div id="target-branch-group" class="form-group" style="display:none">
+                        <label for="target-branch">Target Branch Name (Optional)</label>
+                        <input type="text" id="target-branch" placeholder="migration/jdk17-20260310-120000">
+                        <span class="hint">Leave empty for auto-generated name: migration/jdk17-{timestamp}</span>
+                    </div>
                     <details class="credentials-section">
                         <summary>Authentication (Optional)</summary>
                         <div class="form-row">
