@@ -928,6 +928,28 @@ main {
     overflow-y: auto;
 }
 
+footer {
+    background: var(--gray-800);
+    color: var(--gray-300);
+    text-align: center;
+    padding: 20px 24px;
+    margin-top: 40px;
+    font-size: 13px;
+}
+
+footer a {
+    color: var(--primary);
+    text-decoration: none;
+}
+
+footer a:hover {
+    text-decoration: underline;
+}
+
+footer strong {
+    color: #fff;
+}
+
 @media (max-width: 768px) {
     .effort-comparison { grid-template-columns: 1fr; }
     .header-content { flex-direction: column; gap: 12px; }
