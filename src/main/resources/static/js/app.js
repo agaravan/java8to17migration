@@ -7,6 +7,7 @@ function showView(viewName) {
     document.getElementById(viewName + '-view').classList.add('active');
     document.querySelector('[data-view="' + viewName + '"]').classList.add('active');
 
+    if (viewName === 'dashboard') loadDashboard();
     if (viewName === 'history') loadHistory();
     if (viewName === 'recipes') loadRecipes();
 }
@@ -195,6 +196,60 @@ function showReport(report, pushResult) {
         html += '<div class="report-section"><h3>Next Steps</h3><ul class="next-steps-list">';
         for (var i = 0; i < nextSteps.length; i++) { html += '<li>' + nextSteps[i] + '</li>'; }
         html += '</ul></div>';
+    }
+
+    var ee = report.effortEstimate || {};
+    if (ee.estimatedManualEffortHours) {
+        html += '<div class="report-section"><h3>Effort Analysis</h3>';
+        html += '<div class="stats-grid">' +
+            statCard(ee.estimatedManualEffortHours + 'h', 'Est. Manual Effort', 'high') +
+            statCard(ee.toolTimeFormatted || '-', 'Tool Time', 'low') +
+            statCard(ee.automationPercentage + '%', 'Automated', 'low') +
+            statCard(ee.remainingManualHours + 'h', 'Remaining Manual', 'medium') +
+            statCard(ee.timeSavedHours + 'h', 'Time Saved', 'low') +
+            '</div>';
+        if (ee.breakdown && ee.breakdown.length > 0) {
+            html += '<table class="timing-table" style="margin-top:16px"><thead><tr>' +
+                '<th>Category</th><th>Count</th><th>Est. Manual Hours</th><th>Status</th></tr></thead><tbody>';
+            for (var i = 0; i < ee.breakdown.length; i++) {
+                var b = ee.breakdown[i];
+                html += '<tr><td class="step-name-cell">' + escapeHtml(b.category) + '</td>' +
+                    '<td>' + b.count + '</td>' +
+                    '<td class="duration-cell">' + b.manualHours + 'h</td>' +
+                    '<td class="message-cell">' + escapeHtml(b.status) + '</td></tr>';
+            }
+            html += '</tbody></table>';
+        }
+        html += '</div>';
+    }
+
+    var cs = report.changeSummary || {};
+    var fc = report.fileChanges || [];
+    if (fc.length > 0) {
+        html += '<div class="report-section"><h3>Change History (' + fc.length + ' files)</h3>';
+        html += '<div class="stats-grid" style="margin-bottom:16px">' +
+            statCard(cs.totalFilesChanged || 0, 'Files Changed', '') +
+            statCard(cs.javaFilesChanged || 0, 'Java Files', '') +
+            statCard(cs.configFilesChanged || 0, 'Config Files', '') +
+            statCard('+' + (cs.totalLinesAdded || 0), 'Lines Added', 'low') +
+            statCard('-' + (cs.totalLinesRemoved || 0), 'Lines Removed', 'high') +
+            '</div>';
+        html += '<table class="timing-table"><thead><tr>' +
+            '<th>File</th><th>Change</th><th>Lines +/-</th><th>Type</th></tr></thead><tbody>';
+        for (var i = 0; i < fc.length; i++) {
+            var f = fc[i];
+            var changeClass = f.changeType === 'ADD' ? 'low' : (f.changeType === 'DELETE' ? 'high' : '');
+            html += '<tr class="change-row" onclick="toggleDiff(\'' + i + '\')">' +
+                '<td class="step-name-cell" style="cursor:pointer">' + escapeHtml(f.file) + '</td>' +
+                '<td><span class="change-badge ' + changeClass + '">' + (f.changeType || '-') + '</span></td>' +
+                '<td class="duration-cell">+' + (f.linesAdded || 0) + ' / -' + (f.linesRemoved || 0) + '</td>' +
+                '<td>' + escapeHtml(f.fileType || '') + '</td></tr>';
+            if (f.diff) {
+                html += '<tr id="diff-row-' + i + '" style="display:none"><td colspan="4">' +
+                    '<pre class="diff-block">' + escapeHtml(f.diff) + '</pre></td></tr>';
+            }
+        }
+        html += '</tbody></table></div>';
     }
 
     var oc = report.openRewriteConfig || {};
@@ -404,6 +459,104 @@ function toggleTargetBranch() {
     if (checked) {
         credSection.open = true;
     }
+}
+
+function toggleDiff(idx) {
+    var row = document.getElementById('diff-row-' + idx);
+    if (row) {
+        row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
+    }
+}
+
+function loadDashboard() {
+    fetch('/api/dashboard')
+        .then(function(res) { return res.json(); })
+        .then(function(d) {
+            var container = document.getElementById('dashboard-content');
+            if (d.totalMigrations === 0) {
+                container.innerHTML = '<p class="empty-state">No migrations yet. Run a migration to see dashboard metrics.</p>';
+                return;
+            }
+
+            var html = '';
+
+            html += '<div class="dashboard-section"><h3>Overview</h3>';
+            html += '<div class="stats-grid">' +
+                statCard(d.totalMigrations, 'Total Migrations', '') +
+                statCard(d.completedMigrations, 'Completed', 'low') +
+                statCard(d.failedMigrations, 'Failed', d.failedMigrations > 0 ? 'high' : '') +
+                statCard(d.uniqueRepos, 'Unique Repos', '') +
+                statCard(d.totalModules, 'Total Modules', '') +
+                statCard(d.totalJavaFiles, 'Java Files Processed', '') +
+                statCard(d.totalFilesChanged, 'Files Changed', '') +
+                statCard(d.totalLinesChanged, 'Lines Changed', '') +
+                '</div></div>';
+
+            html += '<div class="dashboard-section"><h3>Effort Metrics</h3>';
+            html += '<div class="effort-comparison">';
+
+            html += '<div class="effort-card manual">';
+            html += '<div class="effort-header">Without This Tool</div>';
+            html += '<div class="effort-value">' + d.totalEstimatedManualHours + '<span>hours</span></div>';
+            html += '<div class="effort-label">Estimated manual migration effort</div>';
+            html += '</div>';
+
+            html += '<div class="effort-card tool">';
+            html += '<div class="effort-header">With This Tool</div>';
+            html += '<div class="effort-value">' + d.totalToolTimeFormatted + '<span></span></div>';
+            html += '<div class="effort-label">Actual tool processing time</div>';
+            html += '</div>';
+
+            html += '<div class="effort-card saved">';
+            html += '<div class="effort-header">Time Saved</div>';
+            html += '<div class="effort-value">' + d.totalTimeSavedHours + '<span>hours</span></div>';
+            html += '<div class="effort-label">Automated by OpenRewrite recipes</div>';
+            html += '</div>';
+
+            html += '</div>';
+
+            html += '<div class="progress-bar-container">';
+            html += '<div class="progress-labels">';
+            html += '<span>Automated: ' + d.overallAutomationPercentage + '%</span>';
+            html += '<span>Remaining Manual: ' + d.totalRemainingManualHours + 'h</span>';
+            html += '</div>';
+            html += '<div class="progress-bar">';
+            html += '<div class="progress-fill" style="width:' + d.overallAutomationPercentage + '%"></div>';
+            html += '</div>';
+            html += '</div>';
+            html += '</div>';
+
+            if (d.repoSummaries && d.repoSummaries.length > 0) {
+                html += '<div class="dashboard-section"><h3>Per-Repository Breakdown</h3>';
+                html += '<table class="timing-table"><thead><tr>';
+                html += '<th>Repository</th><th>Branch</th><th>Status</th><th>Tool Time</th>';
+                html += '<th>Java Files</th><th>Issues</th><th>Files Changed</th>';
+                html += '<th>Est. Manual</th><th>Remaining</th><th>Automated</th>';
+                html += '</tr></thead><tbody>';
+                for (var i = 0; i < d.repoSummaries.length; i++) {
+                    var r = d.repoSummaries[i];
+                    html += '<tr>';
+                    html += '<td class="step-name-cell">' + escapeHtml(r.repoName) + '</td>';
+                    html += '<td>' + escapeHtml(r.branch) + '</td>';
+                    html += '<td><span class="status-badge ' + r.status + '">' + r.status + '</span></td>';
+                    html += '<td class="duration-cell">' + escapeHtml(r.toolTime) + '</td>';
+                    html += '<td>' + (r.javaFiles || 0) + '</td>';
+                    html += '<td>' + (r.issues || 0) + '</td>';
+                    html += '<td>' + (r.filesChanged || 0) + '</td>';
+                    html += '<td class="duration-cell">' + (r.estimatedManualHours || '-') + 'h</td>';
+                    html += '<td class="duration-cell">' + (r.remainingManualHours || '-') + 'h</td>';
+                    html += '<td><span class="automation-badge">' + (r.automationPercentage || 0) + '%</span></td>';
+                    html += '</tr>';
+                }
+                html += '</tbody></table></div>';
+            }
+
+            container.innerHTML = html;
+        })
+        .catch(function(err) {
+            document.getElementById('dashboard-content').innerHTML =
+                '<p class="empty-state">Failed to load dashboard: ' + escapeHtml(err.message) + '</p>';
+        });
 }
 
 loadRecipes();

@@ -45,6 +45,7 @@ src/main/resources/
 - GET /api/migrations/{id} - Get migration status
 - GET /api/migrations/{id}/report - Get migration report
 - GET /api/recipes - List available recipes
+- GET /api/dashboard - Aggregated metrics across all migrations
 - GET /api/health - Health check
 
 ## Migration Pipeline
@@ -65,6 +66,12 @@ src/main/resources/
   - Pushes to the remote origin
   - Requires authentication (username + app password/token)
 - Push result is tracked in the migration job and displayed in both the progress UI and history
+
+## Dashboard & Effort Analysis
+- Dashboard tab shows aggregated metrics across all completed migrations
+- Effort estimation uses industry averages (0.5h/Java file, 2h/high issue, 1h/medium, 4h/module migration, 8h/module testing)
+- Change history captures JGit diffs with file-level line counts, change types, and inline diff text
+- Per-migration reports include Effort Analysis and Change History sections with expandable diffs
 
 ## Development Notes
 - Static resources (HTML/CSS/JS) in `src/main/resources/static/` are served at runtime without recompile

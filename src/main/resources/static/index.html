@@ -17,6 +17,7 @@
                 </div>
             </div>
             <nav>
+                <button class="nav-btn" data-view="dashboard" onclick="showView('dashboard')">Dashboard</button>
                 <button class="nav-btn active" data-view="migrate" onclick="showView('migrate')">New Migration</button>
                 <button class="nav-btn" data-view="history" onclick="showView('history')">History</button>
                 <button class="nav-btn" data-view="recipes" onclick="showView('recipes')">Recipes</button>
@@ -25,6 +26,18 @@
     </header>
 
     <main>
+        <section id="dashboard-view" class="view">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Migration Dashboard</h2>
+                    <p>Overall metrics and effort analysis across all migrations</p>
+                </div>
+                <div id="dashboard-content">
+                    <p class="empty-state">Loading dashboard...</p>
+                </div>
+            </div>
+        </section>
+
         <section id="migrate-view" class="view active">
             <div class="card">
                 <div class="card-header">

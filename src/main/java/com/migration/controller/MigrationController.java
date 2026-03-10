@@ -91,4 +91,9 @@ public class MigrationController {
     public List<Recipe> getRecipes() {
         return orchestrator.getAvailableRecipes();
     }
+
+    @GetMapping("/dashboard")
+    public Map<String, Object> getDashboard() {
+        return orchestrator.getDashboardMetrics();
+    }
 }
