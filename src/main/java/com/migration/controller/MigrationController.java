@@ -46,11 +46,30 @@ public class MigrationController {
             }
         }
 
+        int sourceVersion = request.getSourceVersion();
+        int targetVersion = request.getTargetVersion();
+        int[] allowedSources = {8, 11, 17};
+        int[] allowedTargets = {11, 17, 21};
+        boolean validSource = false, validTarget = false;
+        for (int v : allowedSources) { if (v == sourceVersion) validSource = true; }
+        for (int v : allowedTargets) { if (v == targetVersion) validTarget = true; }
+        if (!validSource) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Invalid source version. Supported source versions: 8, 11, 17"));
+        }
+        if (!validTarget) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Invalid target version. Supported target versions: 11, 17, 21"));
+        }
+        if (targetVersion <= sourceVersion) {
+            return ResponseEntity.badRequest().body(Map.of("error",
+                    "Target version must be higher than source version. Supported paths: 8\u219211/17/21, 11\u219217/21, 17\u219221"));
+        }
+
         try {
             MigrationJob job = orchestrator.startMigration(
                     request.getRepoUrl(), request.getBranch(),
                     request.getUsername(), request.getPassword(),
-                    request.isPushToNewBranch(), request.getTargetBranchName());
+                    request.isPushToNewBranch(), request.getTargetBranchName(),
+                    sourceVersion, targetVersion);
 
             Map<String, Object> response = new LinkedHashMap<>();
             response.put("migrationId", job.getId());

@@ -19,6 +19,8 @@ public class MigrationJob {
     private boolean pushToNewBranch;
     private String targetBranchName;
     private Map<String, Object> pushResult;
+    private int sourceVersion = 8;
+    private int targetVersion = 17;
 
     public MigrationJob(String id, String repoUrl, String branch) {
         this.id = id;
@@ -52,6 +54,10 @@ public class MigrationJob {
     public void setTargetBranchName(String targetBranchName) { this.targetBranchName = targetBranchName; }
     public Map<String, Object> getPushResult() { return pushResult; }
     public void setPushResult(Map<String, Object> pushResult) { this.pushResult = pushResult; }
+    public int getSourceVersion() { return sourceVersion; }
+    public void setSourceVersion(int sourceVersion) { this.sourceVersion = sourceVersion; }
+    public int getTargetVersion() { return targetVersion; }
+    public void setTargetVersion(int targetVersion) { this.targetVersion = targetVersion; }
 
     public String getTotalTimeTaken() {
         if (completedAt == null) {

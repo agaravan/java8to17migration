@@ -48,14 +48,20 @@ src/main/resources/
 - GET /api/dashboard - Aggregated metrics across all migrations
 - GET /api/health - Health check
 
+## Supported Migration Paths
+- Java 8 → 11, 17, or 21
+- Java 11 → 17 or 21
+- Java 17 → 21
+- Version selection via dropdowns in the UI; target options filtered to only show versions higher than source
+
 ## Migration Pipeline
 1. Clone repo via JGit (shallow clone by default; full clone when push enabled)
 2. Analyze pom.xml (detect JDK version, dependencies)
 3. Scan Java files (JAXB, JAX-WS, Nashorn, reflection, deprecated APIs)
-4. Inject OpenRewrite plugin + configure recipes
+4. Inject OpenRewrite plugin + configure version-appropriate recipes
 5. Run mvn rewrite:run
 6. Generate migration report
-7. (Optional) Commit and push changes to new branch (e.g., migration/jdk17-{timestamp})
+7. (Optional) Commit and push changes to new branch (e.g., migration/jdk{target}-{timestamp})
 8. Cleanup cloned repo
 
 ## Push to Branch Feature

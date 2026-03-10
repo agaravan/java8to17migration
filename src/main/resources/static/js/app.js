@@ -19,8 +19,15 @@ function startMigration(e) {
     var branch = document.getElementById('branch').value.trim();
     var username = document.getElementById('username').value.trim();
     var password = document.getElementById('password').value.trim();
+    var sourceVersion = parseInt(document.getElementById('source-version').value);
+    var targetVersion = parseInt(document.getElementById('target-version').value);
 
     if (!repoUrl || !branch) return;
+
+    if (targetVersion <= sourceVersion) {
+        alert('Target version must be higher than source version.');
+        return;
+    }
 
     var submitBtn = document.getElementById('submit-btn');
     submitBtn.disabled = true;
@@ -38,7 +45,7 @@ function startMigration(e) {
         return;
     }
 
-    var body = { repoUrl: repoUrl, branch: branch };
+    var body = { repoUrl: repoUrl, branch: branch, sourceVersion: sourceVersion, targetVersion: targetVersion };
     if (username) body.username = username;
     if (password) body.password = password;
     if (pushToNewBranch) {
@@ -458,6 +465,34 @@ function toggleTargetBranch() {
     var credSection = document.querySelector('.credentials-section');
     if (checked) {
         credSection.open = true;
+    }
+}
+
+function updateTargetVersions() {
+    var sourceVal = parseInt(document.getElementById('source-version').value);
+    var targetSelect = document.getElementById('target-version');
+    var allVersions = [
+        { value: 11, label: 'Java 11' },
+        { value: 17, label: 'Java 17' },
+        { value: 21, label: 'Java 21' }
+    ];
+    var currentTarget = parseInt(targetSelect.value);
+    targetSelect.innerHTML = '';
+    var hasSelected = false;
+    for (var i = 0; i < allVersions.length; i++) {
+        if (allVersions[i].value > sourceVal) {
+            var opt = document.createElement('option');
+            opt.value = allVersions[i].value;
+            opt.textContent = allVersions[i].label;
+            if (allVersions[i].value === currentTarget) {
+                opt.selected = true;
+                hasSelected = true;
+            }
+            targetSelect.appendChild(opt);
+        }
+    }
+    if (!hasSelected && targetSelect.options.length > 0) {
+        targetSelect.options[0].selected = true;
     }
 }
 

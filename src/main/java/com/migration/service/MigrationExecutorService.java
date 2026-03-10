@@ -14,11 +14,13 @@ public class MigrationExecutorService {
     private static final String OPENREWRITE_PLUGIN_VERSION = "5.42.2";
     private static final String REWRITE_RECIPE_VERSION = "2.25.0";
 
-    public Map<String, Object> applyMigration(String projectPath, Map<String, Object> analysis) {
+    public Map<String, Object> applyMigration(String projectPath, Map<String, Object> analysis, int targetVersion) {
         Map<String, Object> result = new LinkedHashMap<>();
         List<Map<String, Object>> pomChanges = new ArrayList<>();
         List<Map<String, Object>> javaChanges = new ArrayList<>();
         List<String> warnings = new ArrayList<>();
+
+        String tv = String.valueOf(targetVersion);
 
         @SuppressWarnings("unchecked")
         List<String> pomFiles = (List<String>) analysis.get("pomFiles");
@@ -26,23 +28,15 @@ public class MigrationExecutorService {
             Map<String, Object> change = new LinkedHashMap<>();
             change.put("file", Path.of(pomFile).getFileName().toString());
             change.put("changes", List.of(
-                    "Updated maven.compiler.source to 17",
-                    "Updated maven.compiler.target to 17",
+                    "Updated maven.compiler.source to " + tv,
+                    "Updated maven.compiler.target to " + tv,
                     "Added OpenRewrite maven plugin v" + OPENREWRITE_PLUGIN_VERSION,
                     "Added rewrite-migrate-java v" + REWRITE_RECIPE_VERSION
             ));
             pomChanges.add(change);
         }
 
-        List<String> activeRecipes = new ArrayList<>();
-        activeRecipes.add("org.openrewrite.java.migrate.UpgradeToJava17");
-        activeRecipes.add("org.openrewrite.java.migrate.JavaVersion17");
-        if (Boolean.TRUE.equals(analysis.get("hasJaxb")))
-            activeRecipes.add("org.openrewrite.java.migrate.javax.AddJaxbDependencies");
-        if (Boolean.TRUE.equals(analysis.get("hasJaxws")))
-            activeRecipes.add("org.openrewrite.java.migrate.javax.AddJaxwsDependencies");
-        if (Boolean.TRUE.equals(analysis.get("hasLombok")))
-            activeRecipes.add("org.openrewrite.java.migrate.lombok.UpdateLombokToJava17");
+        List<String> activeRecipes = buildRecipeList(analysis, targetVersion);
 
         String recipeArg = String.join(",", activeRecipes);
         String mavenOutput = runMaven(projectPath, recipeArg, warnings);
@@ -68,6 +62,34 @@ public class MigrationExecutorService {
         result.put("mavenOutput", mavenOutput);
         result.put("mavenSuccess", mavenSuccess);
         return result;
+    }
+
+    private List<String> buildRecipeList(Map<String, Object> analysis, int targetVersion) {
+        List<String> recipes = new ArrayList<>();
+
+        switch (targetVersion) {
+            case 11:
+                recipes.add("org.openrewrite.java.migrate.UpgradeToJava11");
+                recipes.add("org.openrewrite.java.migrate.JavaVersion11");
+                break;
+            case 21:
+                recipes.add("org.openrewrite.java.migrate.UpgradeToJava21");
+                recipes.add("org.openrewrite.java.migrate.JavaVersion21");
+                break;
+            default:
+                recipes.add("org.openrewrite.java.migrate.UpgradeToJava17");
+                recipes.add("org.openrewrite.java.migrate.JavaVersion17");
+                break;
+        }
+
+        if (Boolean.TRUE.equals(analysis.get("hasJaxb")))
+            recipes.add("org.openrewrite.java.migrate.javax.AddJaxbDependencies");
+        if (Boolean.TRUE.equals(analysis.get("hasJaxws")))
+            recipes.add("org.openrewrite.java.migrate.javax.AddJaxwsDependencies");
+        if (Boolean.TRUE.equals(analysis.get("hasLombok")) && targetVersion >= 17)
+            recipes.add("org.openrewrite.java.migrate.lombok.UpdateLombokToJava17");
+
+        return recipes;
     }
 
     private String resolveMavenExecutable() {
@@ -133,11 +155,11 @@ public class MigrationExecutorService {
 
     @SuppressWarnings("unchecked")
     public Map<String, Object> generateReport(String projectPath, Map<String, Object> analysis,
-                                               Map<String, Object> migrationResult) {
+                                               Map<String, Object> migrationResult, int sourceVersion, int targetVersion) {
         Map<String, Object> report = new LinkedHashMap<>();
         report.put("generatedAt", java.time.Instant.now().toString());
-        report.put("sourceVersion", analysis.get("sourceVersion"));
-        report.put("targetVersion", "17");
+        report.put("sourceVersion", String.valueOf(sourceVersion));
+        report.put("targetVersion", String.valueOf(targetVersion));
 
         List<Map<String, String>> issues = (List<Map<String, String>>) analysis.get("issues");
         int totalIssues = issues != null ? issues.size() : 0;
@@ -158,6 +180,7 @@ public class MigrationExecutorService {
         summary.put("pomFilesModified", pomFiles != null ? pomFiles.size() : 0);
         report.put("summary", summary);
 
+        String tv = String.valueOf(targetVersion);
         List<Map<String, Object>> moduleReport = new ArrayList<>();
         if (modules != null) {
             for (Map<String, Object> m : modules) {
@@ -165,7 +188,7 @@ public class MigrationExecutorService {
                 mr.put("artifactId", m.get("artifactId"));
                 mr.put("groupId", m.get("groupId"));
                 mr.put("previousSourceVersion", m.get("sourceVersion"));
-                mr.put("newSourceVersion", "17");
+                mr.put("newSourceVersion", tv);
                 mr.put("dependencyCount", m.get("dependencyCount"));
                 moduleReport.add(mr);
             }
@@ -176,13 +199,11 @@ public class MigrationExecutorService {
         report.put("changes", migrationResult);
         report.put("warnings", migrationResult.get("warnings"));
 
+        List<String> activeRecipes = buildRecipeList(analysis, targetVersion);
         Map<String, Object> rewriteConfig = new LinkedHashMap<>();
         rewriteConfig.put("pluginVersion", OPENREWRITE_PLUGIN_VERSION);
         rewriteConfig.put("recipeVersion", REWRITE_RECIPE_VERSION);
-        rewriteConfig.put("recipes", List.of(
-                "org.openrewrite.java.migrate.UpgradeToJava17",
-                "org.openrewrite.java.migrate.JavaVersion17"
-        ));
+        rewriteConfig.put("recipes", activeRecipes);
         report.put("openRewriteConfig", rewriteConfig);
 
         report.put("nextSteps", List.of(
@@ -191,8 +212,8 @@ public class MigrationExecutorService {
                 "Run mvn rewrite:dryRun first to preview changes without modifying files",
                 "Run full test suite: mvn clean test",
                 "Check for compilation errors and fix remaining issues",
-                "Test with OpenJDK 17.0.2 runtime",
-                "Update CI/CD pipeline to use JDK 17",
+                "Test with OpenJDK " + tv + " runtime",
+                "Update CI/CD pipeline to use JDK " + tv,
                 "Add --add-opens flags to JVM arguments if using reflection-heavy libraries"
         ));
 

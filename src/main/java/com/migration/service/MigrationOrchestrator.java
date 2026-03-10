@@ -40,7 +40,8 @@ public class MigrationOrchestrator {
     }
 
     public MigrationJob startMigration(String repoUrl, String branch, String username, String password,
-                                        boolean pushToNewBranch, String targetBranchName) {
+                                        boolean pushToNewBranch, String targetBranchName,
+                                        int sourceVersion, int targetVersion) {
         if (activeMigrations.get() >= maxConcurrent) {
             throw new IllegalStateException("Maximum " + maxConcurrent + " concurrent migrations allowed. Please wait.");
         }
@@ -49,6 +50,8 @@ public class MigrationOrchestrator {
         MigrationJob job = new MigrationJob(id, repoUrl, branch);
         job.setPushToNewBranch(pushToNewBranch);
         job.setTargetBranchName(targetBranchName);
+        job.setSourceVersion(sourceVersion);
+        job.setTargetVersion(targetVersion);
         migrations.put(id, job);
 
         threadPool.submit(() -> processMigration(job, username, password));
@@ -72,12 +75,12 @@ public class MigrationOrchestrator {
                     ((List<?>) analysis.get("modules")).size(), analysis.get("sourceVersion")));
 
             job.updateStep("configure", "in_progress", "Configuring OpenRewrite recipes...");
-            Map<String, Object> config = rewriteConfigService.configureRewrite(clonePath, analysis);
+            Map<String, Object> config = rewriteConfigService.configureRewrite(clonePath, analysis, job.getTargetVersion());
             List<?> recipes = (List<?>) config.get("recipesApplied");
-            job.updateStep("configure", "completed", String.format("Configured %d recipe(s)", recipes.size()));
+            job.updateStep("configure", "completed", String.format("Configured %d recipe(s) for Java %d", recipes.size(), job.getTargetVersion()));
 
             job.updateStep("migrate", "in_progress", "Applying migration recipes...");
-            Map<String, Object> result = executorService.applyMigration(clonePath, analysis);
+            Map<String, Object> result = executorService.applyMigration(clonePath, analysis, job.getTargetVersion());
             boolean mavenSuccess = Boolean.TRUE.equals(result.get("mavenSuccess"));
             String migrateMsg = mavenSuccess
                     ? "Migration recipes applied successfully"
@@ -87,7 +90,7 @@ public class MigrationOrchestrator {
             job.updateStep("report", "in_progress", "Capturing changes and generating report...");
             List<Map<String, Object>> fileChanges = changeHistoryService.captureChanges(clonePath);
             Map<String, Object> changeSummary = changeHistoryService.summarizeChanges(fileChanges);
-            Map<String, Object> report = executorService.generateReport(clonePath, analysis, result);
+            Map<String, Object> report = executorService.generateReport(clonePath, analysis, result, job.getSourceVersion(), job.getTargetVersion());
             report.put("fileChanges", fileChanges);
             report.put("changeSummary", changeSummary);
             long elapsedSeconds = Duration.between(job.getCreatedAt(), java.time.Instant.now()).getSeconds();
@@ -104,7 +107,8 @@ public class MigrationOrchestrator {
                 try {
                     job.updateStep("push", "in_progress", "Pushing migrated code to new branch...");
                     Map<String, Object> pushResult = gitService.commitAndPush(
-                            clonePath, job.getTargetBranchName(), username, password);
+                            clonePath, job.getTargetBranchName(), username, password,
+                            job.getSourceVersion(), job.getTargetVersion());
                     job.setPushResult(pushResult);
                     boolean pushed = Boolean.TRUE.equals(pushResult.get("pushed"));
                     String pushMsg = (String) pushResult.get("message");
@@ -359,9 +363,17 @@ public class MigrationOrchestrator {
 
     public List<Recipe> getAvailableRecipes() {
         return List.of(
+            new Recipe("org.openrewrite.java.migrate.UpgradeToJava11",
+                    "Upgrade to Java 11",
+                    "Migrates Java 8 code to Java 11, including deprecated API replacements and removed API alternatives.",
+                    "core", true),
             new Recipe("org.openrewrite.java.migrate.UpgradeToJava17",
                     "Upgrade to Java 17",
-                    "Migrates Java 8 code to Java 17, including deprecated API replacements, removed API alternatives, and compiler settings.",
+                    "Migrates Java code to Java 17, including deprecated API replacements, removed API alternatives, and compiler settings.",
+                    "core", true),
+            new Recipe("org.openrewrite.java.migrate.UpgradeToJava21",
+                    "Upgrade to Java 21",
+                    "Migrates Java code to Java 21, including virtual threads support, pattern matching, and modern API usage.",
                     "core", true),
             new Recipe("org.openrewrite.java.migrate.javax.AddJaxbDependencies",
                     "Add JAXB Dependencies",
@@ -372,21 +384,17 @@ public class MigrationOrchestrator {
                     "Adds explicit JAX-WS dependencies since javax.xml.ws was removed from the JDK in Java 11.",
                     "api-removal", false),
             new Recipe("org.openrewrite.java.migrate.lombok.UpdateLombokToJava17",
-                    "Update Lombok for Java 17",
-                    "Updates Lombok to a version compatible with Java 17 and adjusts configurations.",
+                    "Update Lombok for Java 17+",
+                    "Updates Lombok to a version compatible with Java 17+ and adjusts configurations.",
                     "dependency", false),
             new Recipe("org.openrewrite.maven.UpgradePluginVersion",
                     "Upgrade Maven Plugin Versions",
-                    "Updates Maven plugins to versions compatible with Java 17.",
+                    "Updates Maven plugins to versions compatible with the target Java version.",
                     "build", true),
             new Recipe("org.openrewrite.java.migrate.RemovedJavaXMLWSModuleInfo",
                     "Handle Removed java.xml.ws Module",
                     "Handles the removal of java.xml.ws module from Java 11+.",
                     "api-removal", false),
-            new Recipe("org.openrewrite.java.migrate.JavaVersion17",
-                    "Set Java Version 17",
-                    "Sets the Java version to 17 in build configuration files.",
-                    "core", true),
             new Recipe("org.openrewrite.java.migrate.RemoveMethodInvocation",
                     "Remove Deprecated Method Invocations",
                     "Removes invocations of methods that were deprecated and removed in later Java versions.",

@@ -7,6 +7,8 @@ public class MigrationRequest {
     private String password;
     private boolean pushToNewBranch;
     private String targetBranchName;
+    private int sourceVersion = 8;
+    private int targetVersion = 17;
 
     public String getRepoUrl() { return repoUrl; }
     public void setRepoUrl(String repoUrl) { this.repoUrl = repoUrl; }
@@ -20,4 +22,8 @@ public class MigrationRequest {
     public void setPushToNewBranch(boolean pushToNewBranch) { this.pushToNewBranch = pushToNewBranch; }
     public String getTargetBranchName() { return targetBranchName; }
     public void setTargetBranchName(String targetBranchName) { this.targetBranchName = targetBranchName; }
+    public int getSourceVersion() { return sourceVersion; }
+    public void setSourceVersion(int sourceVersion) { this.sourceVersion = sourceVersion; }
+    public int getTargetVersion() { return targetVersion; }
+    public void setTargetVersion(int targetVersion) { this.targetVersion = targetVersion; }
 }

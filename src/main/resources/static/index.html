@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Java Migration Service - JDK 8 to 17</title>
+    <title>Java Migration Service</title>
     <link rel="stylesheet" href="/css/styles.css">
 </head>
 <body>
@@ -13,7 +13,7 @@
                 <div class="logo-icon">JM</div>
                 <div>
                     <h1>Java Migration Service</h1>
-                    <p class="subtitle">OpenJDK 8 &rarr; OpenJDK 17.0.2</p>
+                    <p class="subtitle">Java Version Migration Tool</p>
                 </div>
             </div>
             <nav>
@@ -42,7 +42,7 @@
             <div class="card">
                 <div class="card-header">
                     <h2>Start New Migration</h2>
-                    <p>Provide the Bitbucket repository details to begin migrating from OpenJDK 8 to 17.0.2</p>
+                    <p>Provide the Bitbucket repository details and select your Java version migration path</p>
                 </div>
                 <form id="migration-form" onsubmit="startMigration(event)">
                     <div class="form-group">
@@ -57,6 +57,26 @@
                             <span class="hint">Feature or develop branch to migrate</span>
                         </div>
                     </div>
+                    <div class="form-row">
+                        <div class="form-group flex-1">
+                            <label for="source-version">Migrate From (Source JDK)</label>
+                            <select id="source-version" onchange="updateTargetVersions()">
+                                <option value="8" selected>Java 8</option>
+                                <option value="11">Java 11</option>
+                                <option value="17">Java 17</option>
+                            </select>
+                            <span class="hint">Current Java version of your project</span>
+                        </div>
+                        <div class="form-group flex-1">
+                            <label for="target-version">Migrate To (Target JDK)</label>
+                            <select id="target-version">
+                                <option value="11">Java 11</option>
+                                <option value="17" selected>Java 17</option>
+                                <option value="21">Java 21</option>
+                            </select>
+                            <span class="hint">Target Java version for migration</span>
+                        </div>
+                    </div>
                     <div class="form-group push-option">
                         <label class="checkbox-label">
                             <input type="checkbox" id="push-to-branch" onchange="toggleTargetBranch()">
@@ -67,7 +87,7 @@
                     <div id="target-branch-group" class="form-group" style="display:none">
                         <label for="target-branch">Target Branch Name (Optional)</label>
                         <input type="text" id="target-branch" placeholder="migration/jdk17-20260310-120000">
-                        <span class="hint">Leave empty for auto-generated name: migration/jdk17-{timestamp}</span>
+                        <span class="hint">Leave empty for auto-generated name: migration/jdk{target}-{timestamp}</span>
                     </div>
                     <details class="credentials-section">
                         <summary>Authentication (Optional)</summary>
@@ -150,7 +170,7 @@
                         <div class="step-number">3</div>
                         <div>
                             <h3>Apply Recipes</h3>
-                            <p>Execute <code>org.openrewrite.java.migrate.UpgradeToJava17</code> and supporting recipes to transform source code and build files.</p>
+                            <p>Execute the appropriate <code>UpgradeToJava{version}</code> and supporting recipes to transform source code and build files.</p>
                         </div>
                     </div>
                     <div class="strategy-step">

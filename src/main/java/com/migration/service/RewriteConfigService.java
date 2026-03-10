@@ -14,7 +14,6 @@ import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
 import java.io.File;
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
@@ -24,18 +23,17 @@ public class RewriteConfigService {
 
     private static final String OPENREWRITE_PLUGIN_VERSION = "5.42.2";
     private static final String REWRITE_RECIPE_VERSION = "2.25.0";
-    private static final String TARGET_JAVA_VERSION = "17";
 
-    public Map<String, Object> configureRewrite(String projectPath, Map<String, Object> analysis) throws Exception {
-        List<String> recipes = buildRecipeList(analysis);
+    public Map<String, Object> configureRewrite(String projectPath, Map<String, Object> analysis, int targetVersion) throws Exception {
+        List<String> recipes = buildRecipeList(analysis, targetVersion);
 
-        String rewriteYml = generateRewriteYaml(recipes);
+        String rewriteYml = generateRewriteYaml(recipes, targetVersion);
         Files.writeString(Path.of(projectPath, "rewrite.yml"), rewriteYml);
 
         @SuppressWarnings("unchecked")
         List<String> pomFiles = (List<String>) analysis.get("pomFiles");
         for (String pomFile : pomFiles) {
-            injectRewritePlugin(pomFile, recipes);
+            injectRewritePlugin(pomFile, recipes, String.valueOf(targetVersion));
         }
 
         Map<String, Object> result = new LinkedHashMap<>();
@@ -46,10 +44,13 @@ public class RewriteConfigService {
         return result;
     }
 
-    private List<String> buildRecipeList(Map<String, Object> analysis) {
+    private List<String> buildRecipeList(Map<String, Object> analysis, int targetVersion) {
         List<String> recipes = new ArrayList<>();
-        recipes.add("org.openrewrite.java.migrate.UpgradeToJava17");
-        recipes.add("org.openrewrite.java.migrate.JavaVersion17");
+
+        String mainRecipe = getMainRecipeForVersion(targetVersion);
+        String versionRecipe = getVersionRecipeForVersion(targetVersion);
+        recipes.add(mainRecipe);
+        recipes.add(versionRecipe);
 
         if (Boolean.TRUE.equals(analysis.get("hasJaxb"))) {
             recipes.add("org.openrewrite.java.migrate.javax.AddJaxbDependencies");
@@ -58,18 +59,46 @@ public class RewriteConfigService {
             recipes.add("org.openrewrite.java.migrate.javax.AddJaxwsDependencies");
         }
         if (Boolean.TRUE.equals(analysis.get("hasLombok"))) {
-            recipes.add("org.openrewrite.java.migrate.lombok.UpdateLombokToJava17");
+            String lombokRecipe = getLombokRecipeForVersion(targetVersion);
+            if (lombokRecipe != null) {
+                recipes.add(lombokRecipe);
+            }
         }
         return recipes;
     }
 
-    private String generateRewriteYaml(List<String> recipes) {
+    private String getMainRecipeForVersion(int version) {
+        switch (version) {
+            case 11: return "org.openrewrite.java.migrate.UpgradeToJava11";
+            case 17: return "org.openrewrite.java.migrate.UpgradeToJava17";
+            case 21: return "org.openrewrite.java.migrate.UpgradeToJava21";
+            default: return "org.openrewrite.java.migrate.UpgradeToJava17";
+        }
+    }
+
+    private String getVersionRecipeForVersion(int version) {
+        switch (version) {
+            case 11: return "org.openrewrite.java.migrate.JavaVersion11";
+            case 17: return "org.openrewrite.java.migrate.JavaVersion17";
+            case 21: return "org.openrewrite.java.migrate.JavaVersion21";
+            default: return "org.openrewrite.java.migrate.JavaVersion17";
+        }
+    }
+
+    private String getLombokRecipeForVersion(int version) {
+        if (version >= 17) {
+            return "org.openrewrite.java.migrate.lombok.UpdateLombokToJava17";
+        }
+        return null;
+    }
+
+    private String generateRewriteYaml(List<String> recipes, int targetVersion) {
         StringBuilder yaml = new StringBuilder();
         yaml.append("---\n");
         yaml.append("type: specs.openrewrite.org/v1beta/recipe\n");
-        yaml.append("name: com.migration.UpgradeToJava17\n");
-        yaml.append("displayName: Migrate from Java 8 to Java 17\n");
-        yaml.append("description: Comprehensive migration from OpenJDK 8 to OpenJDK 17.0.2\n");
+        yaml.append("name: com.migration.UpgradeToJava").append(targetVersion).append("\n");
+        yaml.append("displayName: Migrate to Java ").append(targetVersion).append("\n");
+        yaml.append("description: Comprehensive migration to OpenJDK ").append(targetVersion).append("\n");
         yaml.append("recipeList:\n");
         for (String recipe : recipes) {
             yaml.append("  - ").append(recipe).append("\n");
@@ -77,7 +106,7 @@ public class RewriteConfigService {
         return yaml.toString();
     }
 
-    private void injectRewritePlugin(String pomFile, List<String> recipes) throws Exception {
+    private void injectRewritePlugin(String pomFile, List<String> recipes, String targetJavaVersion) throws Exception {
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
         DocumentBuilder docBuilder = factory.newDocumentBuilder();
@@ -87,12 +116,12 @@ public class RewriteConfigService {
         Element project = doc.getDocumentElement();
 
         Element properties = getOrCreateChild(doc, project, "properties");
-        setChildText(doc, properties, "maven.compiler.source", TARGET_JAVA_VERSION);
-        setChildText(doc, properties, "maven.compiler.target", TARGET_JAVA_VERSION);
+        setChildText(doc, properties, "maven.compiler.source", targetJavaVersion);
+        setChildText(doc, properties, "maven.compiler.target", targetJavaVersion);
 
         NodeList javaVersionNodes = properties.getElementsByTagName("java.version");
         if (javaVersionNodes.getLength() > 0) {
-            javaVersionNodes.item(0).setTextContent(TARGET_JAVA_VERSION);
+            javaVersionNodes.item(0).setTextContent(targetJavaVersion);
         }
 
         Element build = getOrCreateChild(doc, project, "build");
