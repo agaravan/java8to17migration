@@ -82,6 +82,6 @@ src/main/resources/
 ## Development Notes
 - Static resources (HTML/CSS/JS) in `src/main/resources/static/` are served at runtime without recompile
 - Java source changes require: `mvn clean package -DskipTests` then restart workflow
-- History is in-memory only (no database; lost on restart)
+- History is persisted to `./data/history/` as JSON files (survives JAR restarts/upgrades)
 - Max 3 concurrent migrations (configurable in application.properties)
 - Cross-platform Maven execution: auto-selects mvn.cmd on Windows, mvn on Linux

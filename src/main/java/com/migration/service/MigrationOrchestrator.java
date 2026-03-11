@@ -20,6 +20,7 @@ public class MigrationOrchestrator {
     private final RewriteConfigService rewriteConfigService;
     private final MigrationExecutorService executorService;
     private final ChangeHistoryService changeHistoryService;
+    private final HistoryPersistenceService historyPersistenceService;
 
     private final Map<String, MigrationJob> migrations = new ConcurrentHashMap<>();
     private final ExecutorService threadPool = Executors.newFixedThreadPool(3);
@@ -31,12 +32,19 @@ public class MigrationOrchestrator {
     public MigrationOrchestrator(GitService gitService, AnalysisService analysisService,
                                   RewriteConfigService rewriteConfigService,
                                   MigrationExecutorService executorService,
-                                  ChangeHistoryService changeHistoryService) {
+                                  ChangeHistoryService changeHistoryService,
+                                  HistoryPersistenceService historyPersistenceService) {
         this.gitService = gitService;
         this.analysisService = analysisService;
         this.rewriteConfigService = rewriteConfigService;
         this.executorService = executorService;
         this.changeHistoryService = changeHistoryService;
+        this.historyPersistenceService = historyPersistenceService;
+    }
+
+    @jakarta.annotation.PostConstruct
+    public void loadHistory() {
+        migrations.putAll(historyPersistenceService.loadAllJobs());
     }
 
     public MigrationJob startMigration(String repoUrl, String branch, String username, String password,
@@ -122,10 +130,10 @@ public class MigrationOrchestrator {
                 }
             }
 
-            job.setStatus("completed");
+            job.markStatus("completed");
 
         } catch (Exception e) {
-            job.setStatus("failed");
+            job.markStatus("failed");
             job.setError(e.getMessage());
             job.getSteps().stream()
                     .filter(s -> "in_progress".equals(s.getStatus()))
@@ -136,6 +144,7 @@ public class MigrationOrchestrator {
                     });
         } finally {
             activeMigrations.decrementAndGet();
+            historyPersistenceService.saveJob(job);
             if (clonePath != null) {
                 gitService.cleanup(clonePath);
             }

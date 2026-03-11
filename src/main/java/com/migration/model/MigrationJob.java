@@ -1,5 +1,6 @@
 package com.migration.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -22,6 +23,10 @@ public class MigrationJob {
     private int sourceVersion = 8;
     private int targetVersion = 17;
 
+    public MigrationJob() {
+        this.steps = new ArrayList<>();
+    }
+
     public MigrationJob(String id, String repoUrl, String branch) {
         this.id = id;
         this.repoUrl = repoUrl;
@@ -32,18 +37,28 @@ public class MigrationJob {
     }
 
     public String getId() { return id; }
+    public void setId(String id) { this.id = id; }
     public String getRepoUrl() { return repoUrl; }
+    public void setRepoUrl(String repoUrl) { this.repoUrl = repoUrl; }
     public String getBranch() { return branch; }
+    public void setBranch(String branch) { this.branch = branch; }
     public String getStatus() { return status; }
     public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public void markStatus(String status) {
         this.status = status;
         if ("completed".equals(status) || "failed".equals(status)) {
             this.completedAt = Instant.now();
         }
     }
     public Instant getCreatedAt() { return createdAt; }
+    public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public Instant getCompletedAt() { return completedAt; }
+    public void setCompletedAt(Instant completedAt) { this.completedAt = completedAt; }
     public List<MigrationStep> getSteps() { return steps; }
+    public void setSteps(List<MigrationStep> steps) { this.steps = steps; }
     public Map<String, Object> getReport() { return report; }
     public void setReport(Map<String, Object> report) { this.report = report; }
     public String getError() { return error; }
@@ -59,6 +74,7 @@ public class MigrationJob {
     public int getTargetVersion() { return targetVersion; }
     public void setTargetVersion(int targetVersion) { this.targetVersion = targetVersion; }
 
+    @JsonIgnore
     public String getTotalTimeTaken() {
         if (completedAt == null) {
             if ("in_progress".equals(status) || "queued".equals(status)) {
@@ -69,6 +85,7 @@ public class MigrationJob {
         return formatDuration(Duration.between(createdAt, completedAt));
     }
 
+    @JsonIgnore
     public int getTotalJavaFiles() {
         if (report != null && report.get("summary") instanceof Map) {
             @SuppressWarnings("unchecked")
@@ -79,6 +96,7 @@ public class MigrationJob {
         return 0;
     }
 
+    @JsonIgnore
     public int getTotalIssues() {
         if (report != null && report.get("summary") instanceof Map) {
             @SuppressWarnings("unchecked")
@@ -89,6 +107,7 @@ public class MigrationJob {
         return 0;
     }
 
+    @JsonIgnore
     public int getTotalModules() {
         if (report != null && report.get("summary") instanceof Map) {
             @SuppressWarnings("unchecked")

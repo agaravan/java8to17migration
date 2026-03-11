@@ -9,6 +9,8 @@ public class MigrationStep {
     private Instant createdAt;
     private Instant updatedAt;
 
+    public MigrationStep() {}
+
     public MigrationStep(String name, String status, String message) {
         this.name = name;
         this.status = status;
@@ -24,5 +26,7 @@ public class MigrationStep {
     public String getMessage() { return message; }
     public void setMessage(String message) { this.message = message; this.updatedAt = Instant.now(); }
     public Instant getCreatedAt() { return createdAt; }
+    public void setCreatedAt(Instant createdAt) { this.createdAt = createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(Instant updatedAt) { this.updatedAt = updatedAt; }
 }
