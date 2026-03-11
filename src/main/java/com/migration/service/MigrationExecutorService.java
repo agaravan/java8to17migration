@@ -96,18 +96,18 @@ public class MigrationExecutorService {
 
     private String resolveMavenExecutable() {
         String os = System.getProperty("os.name", "").toLowerCase();
-        if (os.contains("win")) {
-            String[] windowsPaths = { "mvn.cmd", "mvn.bat" };
-            for (String cmd : windowsPaths) {
-                try {
-                    Process p = new ProcessBuilder(cmd, "--version").start();
-                    p.waitFor(5, TimeUnit.SECONDS);
-                    if (p.exitValue() == 0) return cmd;
-                } catch (Exception ignored) {}
-            }
-            return "mvn.cmd";
+        boolean isWindows = os.contains("win");
+        String[] candidates = isWindows
+                ? new String[]{ "mvn.cmd", "mvn.bat", "mvn" }
+                : new String[]{ "mvn", "mvn.cmd" };
+        for (String cmd : candidates) {
+            try {
+                Process p = new ProcessBuilder(cmd, "--version").start();
+                boolean done = p.waitFor(5, TimeUnit.SECONDS);
+                if (done && p.exitValue() == 0) return cmd;
+            } catch (Exception ignored) {}
         }
-        return "mvn";
+        return isWindows ? "mvn.cmd" : "mvn";
     }
 
     private String runMaven(String projectPath, String recipeArg, List<String> warnings) {
@@ -149,9 +149,15 @@ public class MigrationExecutorService {
             return output.toString();
 
         } catch (Exception e) {
-            warnings.add("Could not execute Maven automatically: " + e.getMessage() +
-                    ". The pom.xml has been configured - run mvn rewrite:run in your local environment.");
-            return "Maven execution requires project dependencies to be resolvable. Run mvn rewrite:run locally.";
+            String errorMsg = e.getMessage();
+            if (errorMsg != null && errorMsg.contains("Cannot run program")) {
+                warnings.add("Maven is not available on this server. The pom.xml has been fully configured with OpenRewrite recipes. " +
+                        "Run 'mvn rewrite:run' in your local development environment to apply source code transformations.");
+            } else {
+                warnings.add("Could not execute Maven automatically: " + errorMsg +
+                        ". The pom.xml has been configured - run 'mvn rewrite:run' in your local environment.");
+            }
+            return "Maven execution requires a local Maven installation. Run 'mvn rewrite:run' locally to apply transformations.";
         }
     }
 
