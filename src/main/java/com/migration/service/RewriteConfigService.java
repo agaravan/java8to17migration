@@ -23,6 +23,7 @@ public class RewriteConfigService {
 
     private static final String OPENREWRITE_PLUGIN_VERSION = "5.42.2";
     private static final String REWRITE_RECIPE_VERSION = "2.25.0";
+    private static final String MAVEN_COMPILER_PLUGIN_VERSION = "3.13.0";
 
     public Map<String, Object> configureRewrite(String projectPath, Map<String, Object> analysis, int targetVersion) throws Exception {
         List<String> recipes = buildRecipeList(analysis, targetVersion);
@@ -118,6 +119,7 @@ public class RewriteConfigService {
         Element properties = getOrCreateChild(doc, project, "properties");
         setChildText(doc, properties, "maven.compiler.source", targetJavaVersion);
         setChildText(doc, properties, "maven.compiler.target", targetJavaVersion);
+        setChildText(doc, properties, "maven.compiler.release", targetJavaVersion);
 
         NodeList javaVersionNodes = properties.getElementsByTagName("java.version");
         if (javaVersionNodes.getLength() > 0) {
@@ -126,6 +128,8 @@ public class RewriteConfigService {
 
         Element build = getOrCreateChild(doc, project, "build");
         Element plugins = getOrCreateChild(doc, build, "plugins");
+
+        upgradeMavenCompilerPlugin(doc, plugins, targetJavaVersion);
 
         Element existingRewrite = findPluginByArtifactId(plugins, "rewrite-maven-plugin");
         if (existingRewrite != null) {
@@ -161,6 +165,61 @@ public class RewriteConfigService {
         transformer.setOutputProperty("{http://xml.apache.org/xslt}indent-amount", "4");
         transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "no");
         transformer.transform(new DOMSource(doc), new StreamResult(new File(pomFile)));
+    }
+
+    private void upgradeMavenCompilerPlugin(Document doc, Element plugins, String targetJavaVersion) {
+        Element existing = findPluginByArtifactId(plugins, "maven-compiler-plugin");
+
+        if (existing != null) {
+            NodeList versionNodes = existing.getChildNodes();
+            for (int i = 0; i < versionNodes.getLength(); i++) {
+                Node child = versionNodes.item(i);
+                if (child instanceof Element && "version".equals(child.getNodeName())) {
+                    child.setTextContent(MAVEN_COMPILER_PLUGIN_VERSION);
+                    break;
+                }
+            }
+            boolean hasVersion = false;
+            for (int i = 0; i < versionNodes.getLength(); i++) {
+                Node child = versionNodes.item(i);
+                if (child instanceof Element && "version".equals(child.getNodeName())) {
+                    hasVersion = true;
+                    break;
+                }
+            }
+            if (!hasVersion) {
+                Element versionEl = doc.createElement("version");
+                versionEl.setTextContent(MAVEN_COMPILER_PLUGIN_VERSION);
+                existing.insertBefore(versionEl, existing.getFirstChild());
+            }
+
+            Element config = null;
+            for (int i = 0; i < versionNodes.getLength(); i++) {
+                Node child = versionNodes.item(i);
+                if (child instanceof Element && "configuration".equals(child.getNodeName())) {
+                    config = (Element) child;
+                    break;
+                }
+            }
+            if (config != null) {
+                setChildText(doc, config, "source", targetJavaVersion);
+                setChildText(doc, config, "target", targetJavaVersion);
+                setChildText(doc, config, "release", targetJavaVersion);
+            } else {
+                config = doc.createElement("configuration");
+                appendTextElement(doc, config, "release", targetJavaVersion);
+                existing.appendChild(config);
+            }
+        } else {
+            Element plugin = doc.createElement("plugin");
+            appendTextElement(doc, plugin, "groupId", "org.apache.maven.plugins");
+            appendTextElement(doc, plugin, "artifactId", "maven-compiler-plugin");
+            appendTextElement(doc, plugin, "version", MAVEN_COMPILER_PLUGIN_VERSION);
+            Element config = doc.createElement("configuration");
+            appendTextElement(doc, config, "release", targetJavaVersion);
+            plugin.appendChild(config);
+            plugins.appendChild(plugin);
+        }
     }
 
     private Element getOrCreateChild(Document doc, Element parent, String tagName) {
