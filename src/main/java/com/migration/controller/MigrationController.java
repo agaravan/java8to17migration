@@ -17,8 +17,16 @@ public class MigrationController {
 
     private final MigrationOrchestrator orchestrator;
 
+    @org.springframework.beans.factory.annotation.Value("${app.version:unknown}")
+    private String appVersion;
+
     public MigrationController(MigrationOrchestrator orchestrator) {
         this.orchestrator = orchestrator;
+    }
+
+    @GetMapping("/version")
+    public Map<String, String> version() {
+        return Map.of("version", appVersion);
     }
 
     @GetMapping("/health")

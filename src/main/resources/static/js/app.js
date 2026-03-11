@@ -1,6 +1,16 @@
 let currentMigrationId = null;
 let pollingInterval = null;
 
+(function loadAppVersion() {
+    fetch('/api/version')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            var el = document.getElementById('app-version');
+            if (el && data.version) el.textContent = 'v' + data.version;
+        })
+        .catch(function() {});
+})();
+
 function showView(viewName) {
     document.querySelectorAll('.view').forEach(function(v) { v.classList.remove('active'); });
     document.querySelectorAll('.nav-btn').forEach(function(b) { b.classList.remove('active'); });
