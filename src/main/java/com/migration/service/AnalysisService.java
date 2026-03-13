@@ -34,6 +34,9 @@ public class AnalysisService {
         boolean hasJaxws = false;
         boolean hasSpring = false;
         boolean hasSpringBoot = false;
+        boolean hasJunit4 = false;
+        boolean hasPersistence = false;
+        boolean hasJavafx = false;
         List<Map<String, Object>> modules = new ArrayList<>();
 
         for (String pomFile : pomFiles) {
@@ -47,6 +50,9 @@ public class AnalysisService {
             if (Boolean.TRUE.equals(pomAnalysis.get("hasJaxws"))) hasJaxws = true;
             if (Boolean.TRUE.equals(pomAnalysis.get("hasSpring"))) hasSpring = true;
             if (Boolean.TRUE.equals(pomAnalysis.get("hasSpringBoot"))) hasSpringBoot = true;
+            if (Boolean.TRUE.equals(pomAnalysis.get("hasJunit4"))) hasJunit4 = true;
+            if (Boolean.TRUE.equals(pomAnalysis.get("hasPersistence"))) hasPersistence = true;
+            if (Boolean.TRUE.equals(pomAnalysis.get("hasJavafx"))) hasJavafx = true;
         }
 
         analysis.put("modules", modules);
@@ -56,9 +62,14 @@ public class AnalysisService {
         analysis.put("hasJaxws", hasJaxws);
         analysis.put("hasSpring", hasSpring);
         analysis.put("hasSpringBoot", hasSpringBoot);
+        analysis.put("hasJunit4", hasJunit4);
+        analysis.put("hasPersistence", hasPersistence);
+        analysis.put("hasJavafx", hasJavafx);
 
         List<Map<String, String>> issues = analyzeJavaFiles(javaFiles);
         analysis.put("issues", issues);
+        analysis.put("hasFinalize", issues.stream().anyMatch(i -> "deprecated-finalize".equals(i.get("type"))));
+        analysis.put("hasSecurityManager", issues.stream().anyMatch(i -> "removed-security-manager".equals(i.get("type"))));
 
         List<Map<String, String>> recommendations = generateRecommendations(analysis);
         analysis.put("recommendations", recommendations);
@@ -102,6 +113,10 @@ public class AnalysisService {
         result.put("hasJaxws", false);
         result.put("hasSpring", false);
         result.put("hasSpringBoot", false);
+        result.put("hasJunit4", false);
+        result.put("hasPersistence", false);
+        result.put("hasJavafx", false);
+        result.put("packaging", "jar");
 
         try {
             DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
@@ -149,9 +164,22 @@ public class AnalysisService {
                     result.put("hasJaxws", true);
                 if (groupId.contains("springframework")) result.put("hasSpring", true);
                 if (artifactId != null && artifactId.contains("spring-boot")) result.put("hasSpringBoot", true);
+                if ("junit".equals(groupId) && (artifactId == null || "junit".equals(artifactId)))
+                    result.put("hasJunit4", true);
+                if ("org.junit.vintage".equals(groupId)) result.put("hasJunit4", true);
+                if (groupId.contains("javax.persistence") || groupId.contains("jakarta.persistence") ||
+                        (artifactId != null && (artifactId.contains("hibernate-core") || artifactId.contains("persistence-api"))))
+                    result.put("hasPersistence", true);
+                if (groupId.contains("javafx") || (artifactId != null && artifactId.contains("javafx")))
+                    result.put("hasJavafx", true);
             }
             result.put("dependencies", dependencies);
             result.put("dependencyCount", dependencies.size());
+
+            NodeList packagingNodes = doc.getElementsByTagName("packaging");
+            if (packagingNodes.getLength() > 0) {
+                result.put("packaging", packagingNodes.item(0).getTextContent().trim());
+            }
 
         } catch (Exception e) {
             result.put("parseError", e.getMessage());
@@ -229,6 +257,50 @@ public class AnalysisService {
                             "Use valueOf() factory methods instead"));
                 }
 
+                if (content.contains("SecurityManager") || content.contains("setSecurityManager")) {
+                    issues.add(createIssue(fileName, "removed-security-manager", "high",
+                            "Uses SecurityManager which was permanently removed in Java 17",
+                            "Remove all SecurityManager usage - there is no direct replacement in Java 17+"));
+                }
+
+                if ((content.contains(".stop()") || content.contains(".suspend()") || content.contains(".resume()"))
+                        && (content.contains("Thread") || content.contains("thread"))) {
+                    issues.add(createIssue(fileName, "removed-api", "high",
+                            "Uses Thread.stop()/suspend()/resume() which were removed in Java 21",
+                            "Replace with Thread.interrupt() and cooperative interruption patterns"));
+                }
+
+                if (content.contains("protected void finalize(") || content.contains("public void finalize(")) {
+                    issues.add(createIssue(fileName, "deprecated-finalize", "medium",
+                            "Overrides finalize() which is deprecated for removal since Java 18",
+                            "Replace with java.lang.ref.Cleaner or try-with-resources pattern"));
+                }
+
+                if (content.contains("javax.persistence") && !content.contains("jakarta.persistence")) {
+                    issues.add(createIssue(fileName, "removed-module", "high",
+                            "Uses javax.persistence (JPA) which requires an explicit dependency in Java 11+",
+                            "Add jakarta.persistence-api dependency and update imports to jakarta.persistence"));
+                }
+
+                if (content.contains("import javafx.") || content.contains("import com.sun.javafx")) {
+                    issues.add(createIssue(fileName, "removed-module", "high",
+                            "Uses JavaFX which was removed from the JDK in Java 11",
+                            "Add OpenJFX dependency explicitly: org.openjfx:javafx-controls:17+"));
+                }
+
+                if (content.contains("java.lang.Compiler") || content.contains("Compiler.enable()") || content.contains("Compiler.disable()")) {
+                    issues.add(createIssue(fileName, "removed-api", "medium",
+                            "Uses java.lang.Compiler which was removed in Java 17",
+                            "Remove all usages - this class was a no-op stub and has no replacement"));
+                }
+
+                if (content.contains("@RunWith") || content.contains("import org.junit.Test") ||
+                        content.contains("import org.junit.Before") || content.contains("import org.junit.runner")) {
+                    issues.add(createIssue(fileName, "test-framework", "medium",
+                            "Uses JUnit 4 which should be migrated to JUnit 5 for full Java 17+ compatibility",
+                            "Migrate to JUnit 5: @RunWith → @ExtendWith, @Before/@After → @BeforeEach/@AfterEach, @Test stays"));
+                }
+
             } catch (Exception ignored) {}
         }
         return issues;
@@ -278,7 +350,32 @@ public class AnalysisService {
         }
         if (Boolean.TRUE.equals(analysis.get("hasSpringBoot"))) {
             recs.add(createRec("high", "Check Spring Boot Compatibility",
-                    "Ensure Spring Boot version is 2.5+ for Java 17 support. Consider upgrading to Spring Boot 3.x.",
+                    "Ensure Spring Boot version is 2.5+ for Java 17 support. Consider upgrading to Spring Boot 3.x for long-term support.",
+                    null));
+        }
+        if (Boolean.TRUE.equals(analysis.get("hasJunit4"))) {
+            recs.add(createRec("high", "Migrate JUnit 4 to JUnit 5",
+                    "JUnit 4 should be upgraded to JUnit 5 for full Java 17+ compatibility. OpenRewrite JUnit4to5Migration recipe has been configured.",
+                    "org.openrewrite.java.testing.junit5.JUnit4to5Migration"));
+        }
+        if (Boolean.TRUE.equals(analysis.get("hasSecurityManager"))) {
+            recs.add(createRec("critical", "Remove SecurityManager Usage",
+                    "SecurityManager was permanently removed in Java 17. All usages must be manually removed as there is no replacement.",
+                    null));
+        }
+        if (Boolean.TRUE.equals(analysis.get("hasFinalize"))) {
+            recs.add(createRec("medium", "Replace finalize() Methods",
+                    "finalize() is deprecated for removal since Java 18. Replace with java.lang.ref.Cleaner or try-with-resources. OpenRewrite RemoveFinalizeMethod recipe has been configured.",
+                    "org.openrewrite.java.migrate.RemoveFinalizeMethod"));
+        }
+        if (Boolean.TRUE.equals(analysis.get("hasPersistence"))) {
+            recs.add(createRec("high", "Add JPA Dependency Explicitly",
+                    "JPA (javax.persistence) is not bundled with the JDK. Add jakarta.persistence-api as an explicit dependency and update imports.",
+                    null));
+        }
+        if (Boolean.TRUE.equals(analysis.get("hasJavafx"))) {
+            recs.add(createRec("high", "Add OpenJFX Dependency",
+                    "JavaFX was removed from the JDK in Java 11. Add OpenJFX dependencies explicitly (org.openjfx:javafx-controls:17+).",
                     null));
         }
 
@@ -287,7 +384,7 @@ public class AnalysisService {
                 .anyMatch(i -> "strong-encapsulation".equals(i.get("type")));
         if (hasReflection) {
             recs.add(createRec("high", "Handle Strong Encapsulation",
-                    "Java 17 enforces strong encapsulation. You may need --add-opens flags for deep reflection.",
+                    "Java 17 enforces strong encapsulation. Add --add-opens JVM flags or refactor to avoid deep reflection.",
                     null));
         }
 

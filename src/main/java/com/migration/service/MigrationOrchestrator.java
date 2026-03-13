@@ -407,6 +407,14 @@ public class MigrationOrchestrator {
             new Recipe("org.openrewrite.java.migrate.RemoveMethodInvocation",
                     "Remove Deprecated Method Invocations",
                     "Removes invocations of methods that were deprecated and removed in later Java versions.",
+                    "deprecated", false),
+            new Recipe("org.openrewrite.java.testing.junit5.JUnit4to5Migration",
+                    "Migrate JUnit 4 to JUnit 5",
+                    "Migrates JUnit 4 tests to JUnit 5. Replaces @RunWith with @ExtendWith, @Before/@After with @BeforeEach/@AfterEach, and updates assertions.",
+                    "testing", false),
+            new Recipe("org.openrewrite.java.migrate.RemoveFinalizeMethod",
+                    "Remove finalize() Methods",
+                    "Removes finalize() method overrides which are deprecated for removal since Java 18 and scheduled for removal in Java 21+.",
                     "deprecated", false)
         );
     }

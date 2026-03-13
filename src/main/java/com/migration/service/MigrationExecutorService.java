@@ -33,6 +33,11 @@ public class MigrationExecutorService {
                     "Added maven.compiler.release=" + tv,
                     "Upgraded maven-compiler-plugin to 3.13.0",
                     "Upgraded maven-resources-plugin to 3.3.1",
+                    "Upgraded maven-surefire-plugin to 3.2.5",
+                    "Upgraded maven-failsafe-plugin to 3.2.5 (if present)",
+                    "Upgraded maven-jar-plugin to 3.3.0 (if present)",
+                    "Upgraded maven-war-plugin to 3.4.0 (if present)",
+                    "Upgraded maven-dependency-plugin to 3.6.1 (if present)",
                     "Added OpenRewrite maven plugin v" + OPENREWRITE_PLUGIN_VERSION,
                     "Added rewrite-migrate-java v" + REWRITE_RECIPE_VERSION
             ));
@@ -48,12 +53,43 @@ public class MigrationExecutorService {
         List<Map<String, String>> issues = (List<Map<String, String>>) analysis.get("issues");
         if (issues != null) {
             for (Map<String, String> issue : issues) {
-                if ("deprecated-constructor".equals(issue.get("type"))) {
-                    Map<String, Object> jc = new LinkedHashMap<>();
-                    jc.put("file", issue.get("file"));
-                    jc.put("change", "Flagged deprecated constructor usage for review");
-                    jc.put("automated", false);
-                    javaChanges.add(jc);
+                String type = issue.get("type");
+                if (type == null) continue;
+                Map<String, Object> jc = new LinkedHashMap<>();
+                jc.put("file", issue.get("file"));
+                switch (type) {
+                    case "deprecated-constructor":
+                        jc.put("change", "Flagged deprecated wrapper constructor usage (use valueOf() instead)");
+                        jc.put("automated", false);
+                        javaChanges.add(jc);
+                        break;
+                    case "removed-security-manager":
+                        jc.put("change", "MANUAL REQUIRED: SecurityManager usage detected — permanently removed in Java 17");
+                        jc.put("automated", false);
+                        javaChanges.add(jc);
+                        break;
+                    case "removed-api":
+                        jc.put("change", "MANUAL REQUIRED: " + issue.getOrDefault("description", "Removed API usage detected"));
+                        jc.put("automated", false);
+                        javaChanges.add(jc);
+                        break;
+                    case "deprecated-finalize":
+                        jc.put("change", "Flagged finalize() override — OpenRewrite RemoveFinalizeMethod recipe applied");
+                        jc.put("automated", true);
+                        javaChanges.add(jc);
+                        break;
+                    case "removed-module":
+                        jc.put("change", "MANUAL REQUIRED: " + issue.getOrDefault("description", "Removed module usage detected"));
+                        jc.put("automated", false);
+                        javaChanges.add(jc);
+                        break;
+                    case "test-framework":
+                        jc.put("change", "JUnit 4 usage detected — OpenRewrite JUnit4to5Migration recipe applied");
+                        jc.put("automated", true);
+                        javaChanges.add(jc);
+                        break;
+                    default:
+                        break;
                 }
             }
         }
@@ -91,6 +127,10 @@ public class MigrationExecutorService {
             recipes.add("org.openrewrite.java.migrate.javax.AddJaxwsDependencies");
         if (Boolean.TRUE.equals(analysis.get("hasLombok")) && targetVersion >= 17)
             recipes.add("org.openrewrite.java.migrate.lombok.UpdateLombokToJava17");
+        if (Boolean.TRUE.equals(analysis.get("hasJunit4")))
+            recipes.add("org.openrewrite.java.testing.junit5.JUnit4to5Migration");
+        if (Boolean.TRUE.equals(analysis.get("hasFinalize")))
+            recipes.add("org.openrewrite.java.migrate.RemoveFinalizeMethod");
 
         return recipes;
     }

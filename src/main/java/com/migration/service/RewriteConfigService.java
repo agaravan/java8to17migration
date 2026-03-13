@@ -23,8 +23,14 @@ public class RewriteConfigService {
 
     private static final String OPENREWRITE_PLUGIN_VERSION = "5.42.2";
     private static final String REWRITE_RECIPE_VERSION = "2.25.0";
+    private static final String REWRITE_TESTING_VERSION = "2.21.0";
     private static final String MAVEN_COMPILER_PLUGIN_VERSION = "3.13.0";
     private static final String MAVEN_RESOURCES_PLUGIN_VERSION = "3.3.1";
+    private static final String MAVEN_SUREFIRE_PLUGIN_VERSION = "3.2.5";
+    private static final String MAVEN_FAILSAFE_PLUGIN_VERSION = "3.2.5";
+    private static final String MAVEN_JAR_PLUGIN_VERSION = "3.3.0";
+    private static final String MAVEN_WAR_PLUGIN_VERSION = "3.4.0";
+    private static final String MAVEN_DEPENDENCY_PLUGIN_VERSION = "3.6.1";
 
     public Map<String, Object> configureRewrite(String projectPath, Map<String, Object> analysis, int targetVersion) throws Exception {
         List<String> recipes = buildRecipeList(analysis, targetVersion);
@@ -35,7 +41,7 @@ public class RewriteConfigService {
         @SuppressWarnings("unchecked")
         List<String> pomFiles = (List<String>) analysis.get("pomFiles");
         for (String pomFile : pomFiles) {
-            injectRewritePlugin(pomFile, recipes, String.valueOf(targetVersion));
+            injectRewritePlugin(pomFile, recipes, String.valueOf(targetVersion), analysis);
         }
 
         Map<String, Object> result = new LinkedHashMap<>();
@@ -49,10 +55,8 @@ public class RewriteConfigService {
     private List<String> buildRecipeList(Map<String, Object> analysis, int targetVersion) {
         List<String> recipes = new ArrayList<>();
 
-        String mainRecipe = getMainRecipeForVersion(targetVersion);
-        String versionRecipe = getVersionRecipeForVersion(targetVersion);
-        recipes.add(mainRecipe);
-        recipes.add(versionRecipe);
+        recipes.add(getMainRecipeForVersion(targetVersion));
+        recipes.add(getVersionRecipeForVersion(targetVersion));
 
         if (Boolean.TRUE.equals(analysis.get("hasJaxb"))) {
             recipes.add("org.openrewrite.java.migrate.javax.AddJaxbDependencies");
@@ -62,9 +66,13 @@ public class RewriteConfigService {
         }
         if (Boolean.TRUE.equals(analysis.get("hasLombok"))) {
             String lombokRecipe = getLombokRecipeForVersion(targetVersion);
-            if (lombokRecipe != null) {
-                recipes.add(lombokRecipe);
-            }
+            if (lombokRecipe != null) recipes.add(lombokRecipe);
+        }
+        if (Boolean.TRUE.equals(analysis.get("hasJunit4"))) {
+            recipes.add("org.openrewrite.java.testing.junit5.JUnit4to5Migration");
+        }
+        if (Boolean.TRUE.equals(analysis.get("hasFinalize"))) {
+            recipes.add("org.openrewrite.java.migrate.RemoveFinalizeMethod");
         }
         return recipes;
     }
@@ -108,7 +116,7 @@ public class RewriteConfigService {
         return yaml.toString();
     }
 
-    private void injectRewritePlugin(String pomFile, List<String> recipes, String targetJavaVersion) throws Exception {
+    private void injectRewritePlugin(String pomFile, List<String> recipes, String targetJavaVersion, Map<String, Object> analysis) throws Exception {
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
         factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
         DocumentBuilder docBuilder = factory.newDocumentBuilder();
@@ -132,6 +140,11 @@ public class RewriteConfigService {
 
         upgradeMavenCompilerPlugin(doc, plugins, targetJavaVersion);
         upgradeMavenResourcesPlugin(doc, plugins);
+        upgradeMavenSurefirePlugin(doc, plugins);
+        upgradePluginIfExists(doc, plugins, "maven-failsafe-plugin", "org.apache.maven.plugins", MAVEN_FAILSAFE_PLUGIN_VERSION);
+        upgradePluginIfExists(doc, plugins, "maven-jar-plugin", "org.apache.maven.plugins", MAVEN_JAR_PLUGIN_VERSION);
+        upgradePluginIfExists(doc, plugins, "maven-war-plugin", "org.apache.maven.plugins", MAVEN_WAR_PLUGIN_VERSION);
+        upgradePluginIfExists(doc, plugins, "maven-dependency-plugin", "org.apache.maven.plugins", MAVEN_DEPENDENCY_PLUGIN_VERSION);
 
         Element existingRewrite = findPluginByArtifactId(plugins, "rewrite-maven-plugin");
         if (existingRewrite != null) {
@@ -157,6 +170,13 @@ public class RewriteConfigService {
         appendTextElement(doc, dep, "artifactId", "rewrite-migrate-java");
         appendTextElement(doc, dep, "version", REWRITE_RECIPE_VERSION);
         dependencies.appendChild(dep);
+        if (Boolean.TRUE.equals(analysis.get("hasJunit4"))) {
+            Element testingDep = doc.createElement("dependency");
+            appendTextElement(doc, testingDep, "groupId", "org.openrewrite.recipe");
+            appendTextElement(doc, testingDep, "artifactId", "rewrite-testing-frameworks");
+            appendTextElement(doc, testingDep, "version", REWRITE_TESTING_VERSION);
+            dependencies.appendChild(testingDep);
+        }
         plugin.appendChild(dependencies);
 
         plugins.appendChild(plugin);
@@ -221,6 +241,53 @@ public class RewriteConfigService {
             appendTextElement(doc, config, "release", targetJavaVersion);
             plugin.appendChild(config);
             plugins.appendChild(plugin);
+        }
+    }
+
+    private void upgradeMavenSurefirePlugin(Document doc, Element plugins) {
+        Element existing = findPluginByArtifactId(plugins, "maven-surefire-plugin");
+        if (existing != null) {
+            NodeList children = existing.getChildNodes();
+            boolean hasVersion = false;
+            for (int i = 0; i < children.getLength(); i++) {
+                Node child = children.item(i);
+                if (child instanceof Element && "version".equals(child.getNodeName())) {
+                    child.setTextContent(MAVEN_SUREFIRE_PLUGIN_VERSION);
+                    hasVersion = true;
+                    break;
+                }
+            }
+            if (!hasVersion) {
+                Element versionEl = doc.createElement("version");
+                versionEl.setTextContent(MAVEN_SUREFIRE_PLUGIN_VERSION);
+                existing.insertBefore(versionEl, existing.getFirstChild());
+            }
+        } else {
+            Element plugin = doc.createElement("plugin");
+            appendTextElement(doc, plugin, "groupId", "org.apache.maven.plugins");
+            appendTextElement(doc, plugin, "artifactId", "maven-surefire-plugin");
+            appendTextElement(doc, plugin, "version", MAVEN_SUREFIRE_PLUGIN_VERSION);
+            plugins.appendChild(plugin);
+        }
+    }
+
+    private void upgradePluginIfExists(Document doc, Element plugins, String artifactId, String groupId, String version) {
+        Element existing = findPluginByArtifactId(plugins, artifactId);
+        if (existing == null) return;
+        NodeList children = existing.getChildNodes();
+        boolean hasVersion = false;
+        for (int i = 0; i < children.getLength(); i++) {
+            Node child = children.item(i);
+            if (child instanceof Element && "version".equals(child.getNodeName())) {
+                child.setTextContent(version);
+                hasVersion = true;
+                break;
+            }
+        }
+        if (!hasVersion) {
+            Element versionEl = doc.createElement("version");
+            versionEl.setTextContent(version);
+            existing.insertBefore(versionEl, existing.getFirstChild());
         }
     }
 
