@@ -67,15 +67,22 @@ public class NexusAnalysisService {
     private List<Map<String, Object>> findNexusReferences(String filePath, String nexusUrl) {
         List<Map<String, Object>> refs = new ArrayList<>();
         try {
-            String content = Files.readString(Path.of(filePath));
-            String[] lines = content.split("\n");
+            String rawContent = Files.readString(Path.of(filePath));
+            boolean isPom = filePath.endsWith("pom.xml");
+            String searchContent = isPom
+                    ? NexusMigrationService.replaceSkippingSection(rawContent, nexusUrl, "\u0000SKIP\u0000", "dependencyManagement")
+                    : rawContent;
+
+            String[] rawLines = rawContent.split("\n");
+            String[] searchLines = searchContent.split("\n");
             Pattern urlPattern = Pattern.compile("(" + Pattern.quote(nexusUrl) + "[^<\"'\\s]*)");
-            for (int i = 0; i < lines.length; i++) {
-                if (lines[i].contains(nexusUrl)) {
+
+            for (int i = 0; i < searchLines.length && i < rawLines.length; i++) {
+                if (searchLines[i].contains(nexusUrl)) {
                     Map<String, Object> ref = new LinkedHashMap<>();
                     ref.put("line", i + 1);
-                    ref.put("context", lines[i].trim());
-                    Matcher m = urlPattern.matcher(lines[i]);
+                    ref.put("context", rawLines[i].trim());
+                    Matcher m = urlPattern.matcher(rawLines[i]);
                     if (m.find()) ref.put("url", m.group(1));
                     refs.add(ref);
                 }
