@@ -101,8 +101,9 @@ public class MigrationOrchestrator {
             Map<String, Object> report = executorService.generateReport(clonePath, analysis, result, job.getSourceVersion(), job.getTargetVersion());
             report.put("fileChanges", fileChanges);
             report.put("changeSummary", changeSummary);
-            long elapsedSeconds = Duration.between(job.getCreatedAt(), java.time.Instant.now()).getSeconds();
-            Map<String, Object> effortEstimate = estimateEffort(analysis, fileChanges, changeSummary, elapsedSeconds);
+            long elapsedMillis = Duration.between(job.getCreatedAt(), java.time.Instant.now()).toMillis();
+            long elapsedSeconds = elapsedMillis / 1000;
+            Map<String, Object> effortEstimate = estimateEffort(analysis, fileChanges, changeSummary, elapsedMillis);
             report.put("effortEstimate", effortEstimate);
             job.setReport(report);
             job.updateStep("report", "completed",
@@ -165,7 +166,8 @@ public class MigrationOrchestrator {
     private Map<String, Object> estimateEffort(Map<String, Object> analysis,
                                                 List<Map<String, Object>> fileChanges,
                                                 Map<String, Object> changeSummary,
-                                                long toolTimeSeconds) {
+                                                long toolTimeMillis) {
+        long toolTimeSeconds = toolTimeMillis / 1000;
         Map<String, Object> effort = new LinkedHashMap<>();
 
         int javaFiles = analysis.get("javaFileCount") instanceof Number
@@ -218,7 +220,7 @@ public class MigrationOrchestrator {
         effort.put("manualTestingHours", Math.round(manualTestingHours * 10) / 10.0);
         effort.put("codeReviewHours", Math.round(codeReviewHours * 10) / 10.0);
         effort.put("toolTimeSeconds", toolTimeSeconds);
-        effort.put("toolTimeFormatted", formatSeconds(toolTimeSeconds));
+        effort.put("toolTimeFormatted", formatMillis(toolTimeMillis));
         effort.put("remainingManualHours", Math.round(remainingManualHours * 10) / 10.0);
         effort.put("automatedHours", Math.round(automatedHours * 10) / 10.0);
         effort.put("automationPercentage", Math.round(automationPercentage));
@@ -281,7 +283,7 @@ public class MigrationOrchestrator {
             }
 
             if (job.getCompletedAt() != null && job.getCreatedAt() != null) {
-                totalToolTimeSeconds += Duration.between(job.getCreatedAt(), job.getCompletedAt()).getSeconds();
+                totalToolTimeSeconds += Duration.between(job.getCreatedAt(), job.getCompletedAt()).toMillis() / 1000.0;
             }
 
             totalJavaFiles += job.getTotalJavaFiles();
@@ -348,8 +350,9 @@ public class MigrationOrchestrator {
         dashboard.put("totalIssuesFound", totalIssues);
         dashboard.put("totalFilesChanged", totalFilesChanged);
         dashboard.put("totalLinesChanged", totalLinesChanged);
+        long totalToolTimeMs = Math.round(totalToolTimeSeconds * 1000);
         dashboard.put("totalToolTimeSeconds", Math.round(totalToolTimeSeconds));
-        dashboard.put("totalToolTimeFormatted", formatSeconds((long) totalToolTimeSeconds));
+        dashboard.put("totalToolTimeFormatted", formatMillis(totalToolTimeMs));
         dashboard.put("totalEstimatedManualHours", Math.round(totalEstimatedManualHours * 10) / 10.0);
         dashboard.put("totalRemainingManualHours", Math.round(totalRemainingManualHours * 10) / 10.0);
         dashboard.put("totalAutomatedHours", Math.round(totalAutomatedHours * 10) / 10.0);
@@ -361,6 +364,12 @@ public class MigrationOrchestrator {
     }
 
     private String formatSeconds(long totalSecs) {
+        return formatMillis(totalSecs * 1000);
+    }
+
+    private String formatMillis(long totalMs) {
+        if (totalMs < 1000) return totalMs + "ms";
+        long totalSecs = totalMs / 1000;
         if (totalSecs < 60) return totalSecs + "s";
         long mins = totalSecs / 60;
         long secs = totalSecs % 60;

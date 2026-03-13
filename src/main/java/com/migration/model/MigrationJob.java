@@ -119,7 +119,9 @@ public class MigrationJob {
     }
 
     private String formatDuration(Duration d) {
-        long totalSecs = d.getSeconds();
+        long totalMs = d.toMillis();
+        if (totalMs < 1000) return totalMs + "ms";
+        long totalSecs = totalMs / 1000;
         if (totalSecs < 60) return totalSecs + "s";
         long mins = totalSecs / 60;
         long secs = totalSecs % 60;
