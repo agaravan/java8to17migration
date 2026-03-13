@@ -20,6 +20,7 @@ function showView(viewName) {
     if (viewName === 'dashboard') loadDashboard();
     if (viewName === 'history') loadHistory();
     if (viewName === 'recipes') loadRecipes();
+    if (viewName === 'nexus') loadNexusHistory();
 }
 
 function startMigration(e) {
@@ -605,3 +606,229 @@ function loadDashboard() {
 }
 
 loadRecipes();
+
+/* ── Nexus → Artifactory ─────────────────────────────────────────────── */
+
+var currentNexusJobId = null;
+var nexusPollingInterval = null;
+
+function loadNexusHistory() {}
+
+function addMappingRow() {
+    var list = document.getElementById('repo-mappings-list');
+    var row = document.createElement('div');
+    row.className = 'form-row repo-mapping-row';
+    row.innerHTML =
+        '<div class="form-group flex-1">' +
+            '<input type="text" class="mapping-from" placeholder="Nexus path  (e.g. /repository/maven-snapshots)">' +
+        '</div>' +
+        '<div style="display:flex;align-items:center;padding:0 0.5rem;color:var(--text-secondary);">&#8594;</div>' +
+        '<div class="form-group flex-1">' +
+            '<input type="text" class="mapping-to" placeholder="Artifactory path  (e.g. /libs-snapshot)">' +
+        '</div>' +
+        '<button type="button" onclick="this.closest(\'.repo-mapping-row\').remove()" ' +
+            'style="background:none;border:none;color:var(--danger,#dc3545);cursor:pointer;font-size:1.2rem;padding:0 0.5rem;align-self:center">&times;</button>';
+    list.appendChild(row);
+}
+
+function startNexusMigration(e) {
+    e.preventDefault();
+
+    var projectPath = document.getElementById('nexus-project-path').value.trim();
+    var nexusUrl = document.getElementById('nexus-url').value.trim();
+    var artifactoryUrl = document.getElementById('artifactory-url').value.trim();
+
+    if (!projectPath || !nexusUrl || !artifactoryUrl) return;
+
+    var repoMappings = {};
+    document.querySelectorAll('.repo-mapping-row').forEach(function(row) {
+        var from = row.querySelector('.mapping-from');
+        var to = row.querySelector('.mapping-to');
+        if (from && to && from.value.trim() && to.value.trim()) {
+            repoMappings[from.value.trim()] = to.value.trim();
+        }
+    });
+
+    var btn = document.getElementById('nexus-submit-btn');
+    btn.disabled = true;
+    btn.querySelector('.btn-text').style.display = 'none';
+    btn.querySelector('.btn-loading').style.display = 'inline';
+
+    document.getElementById('nexus-progress').style.display = 'none';
+    document.getElementById('nexus-report').style.display = 'none';
+
+    fetch('/api/nexus/start', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            projectPath: projectPath,
+            nexusUrl: nexusUrl,
+            artifactoryUrl: artifactoryUrl,
+            repoMappings: Object.keys(repoMappings).length > 0 ? repoMappings : null
+        })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.error) throw new Error(data.error);
+        currentNexusJobId = data.jobId;
+        document.getElementById('nexus-progress').style.display = 'block';
+        document.getElementById('nexus-status-badge').textContent = 'In Progress';
+        document.getElementById('nexus-status-badge').className = 'status-badge in_progress';
+        pollNexusJob(currentNexusJobId);
+    })
+    .catch(function(err) {
+        alert('Failed to start migration: ' + err.message);
+        btn.disabled = false;
+        btn.querySelector('.btn-text').style.display = 'inline';
+        btn.querySelector('.btn-loading').style.display = 'none';
+    });
+}
+
+function pollNexusJob(jobId) {
+    if (nexusPollingInterval) clearInterval(nexusPollingInterval);
+    nexusPollingInterval = setInterval(function() {
+        fetch('/api/nexus/jobs/' + jobId)
+        .then(function(r) { return r.json(); })
+        .then(function(job) {
+            renderNexusSteps(job.steps || []);
+
+            var badge = document.getElementById('nexus-status-badge');
+            badge.textContent = job.status === 'in_progress' ? 'In Progress'
+                : job.status === 'completed' ? 'Completed'
+                : job.status === 'failed' ? 'Failed' : job.status;
+            badge.className = 'status-badge ' + job.status;
+
+            if (job.status === 'completed' || job.status === 'failed') {
+                clearInterval(nexusPollingInterval);
+                nexusPollingInterval = null;
+
+                var btn = document.getElementById('nexus-submit-btn');
+                btn.disabled = false;
+                btn.querySelector('.btn-text').style.display = 'inline';
+                btn.querySelector('.btn-loading').style.display = 'none';
+
+                if (job.report) {
+                    document.getElementById('nexus-report').style.display = 'block';
+                    renderNexusReport(job.report);
+                }
+                if (job.status === 'failed' && job.error) {
+                    var stepsEl = document.getElementById('nexus-progress-steps');
+                    stepsEl.innerHTML += '<div style="margin-top:1rem;padding:0.75rem 1rem;background:#fff5f5;border:1px solid #fed7d7;border-radius:6px;color:#c53030">' +
+                        '<strong>Error:</strong> ' + escapeHtml(job.error) + '</div>';
+                }
+            }
+        })
+        .catch(function() {});
+    }, 2000);
+}
+
+function renderNexusSteps(steps) {
+    var LABELS = {
+        scan: 'Scan Project Files',
+        analyze: 'Analyze Nexus References',
+        migrate: 'Apply URL Replacements',
+        report: 'Generate Report'
+    };
+    var ORDER = ['scan', 'analyze', 'migrate', 'report'];
+    var byName = {};
+    steps.forEach(function(s) { byName[s.name] = s; });
+
+    var html = '';
+    ORDER.forEach(function(name) {
+        var s = byName[name] || {name: name, status: 'pending', message: ''};
+        var icon = s.status === 'completed' ? '&#10003;'
+            : s.status === 'failed' ? '&#10007;'
+            : s.status === 'in_progress' ? '<span class="spinner"></span>'
+            : '&#9711;';
+        html += '<div class="step-item ' + s.status + '">' +
+            '<div class="step-icon">' + icon + '</div>' +
+            '<div class="step-details">' +
+                '<div class="step-name">' + escapeHtml(LABELS[name] || name) + '</div>' +
+                (s.message ? '<div class="step-message">' + escapeHtml(s.message) + '</div>' : '') +
+            '</div>' +
+        '</div>';
+    });
+    document.getElementById('nexus-progress-steps').innerHTML = html;
+}
+
+function renderNexusReport(report) {
+    var container = document.getElementById('nexus-report-content');
+    var summary = report.summary || {};
+    var changes = report.changes || [];
+    var findings = report.findings || [];
+
+    var html = '<div class="report-summary"><div class="summary-grid">';
+    html += '<div class="summary-item"><div class="summary-label">Files Scanned</div>' +
+            '<div class="summary-value">' + (summary.totalFilesScanned || 0) + '</div></div>';
+    html += '<div class="summary-item"><div class="summary-label">Files with Nexus</div>' +
+            '<div class="summary-value">' + (summary.filesWithNexusRefs || 0) + '</div></div>';
+    html += '<div class="summary-item"><div class="summary-label">Files Modified</div>' +
+            '<div class="summary-value">' + (summary.filesModified || 0) + '</div></div>';
+    html += '<div class="summary-item"><div class="summary-label">URL Replacements</div>' +
+            '<div class="summary-value">' + (summary.totalReplacements || 0) + '</div></div>';
+    html += '<div class="summary-item"><div class="summary-label">Time Taken</div>' +
+            '<div class="summary-value">' + escapeHtml(summary.timeTaken || '-') + '</div></div>';
+    html += '</div>';
+
+    html += '<div style="margin-top:1rem;padding:0.75rem 1rem;background:var(--surface-alt,#f8f9fa);border-radius:6px;font-size:0.875rem;display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap">' +
+        '<span style="color:var(--text-secondary)">Replacing:</span>' +
+        '<code style="background:#fee2e2;padding:0.2rem 0.5rem;border-radius:4px">' + escapeHtml(summary.nexusUrl || '') + '</code>' +
+        '<span style="color:var(--text-secondary)">&#8594;</span>' +
+        '<code style="background:#dcfce7;padding:0.2rem 0.5rem;border-radius:4px">' + escapeHtml(summary.artifactoryUrl || '') + '</code>' +
+    '</div></div>';
+
+    if ((summary.filesWithNexusRefs || 0) === 0) {
+        html += '<p class="empty-state" style="margin-top:1.5rem">No Nexus references found — project is already Artifactory-clean.</p>';
+        container.innerHTML = html;
+        return;
+    }
+
+    if (changes.length > 0) {
+        html += '<h3 style="margin:1.5rem 0 0.75rem;font-size:1rem">Modified Files (' + changes.length + ')</h3>';
+        changes.forEach(function(c) {
+            var lineChanges = c.lineChanges || [];
+            html += '<div style="border:1px solid var(--border,#e2e8f0);border-radius:8px;margin-bottom:1rem;overflow:hidden">';
+            html += '<div style="padding:0.6rem 1rem;background:var(--surface-alt,#f8f9fa);display:flex;justify-content:space-between;align-items:center">' +
+                '<span style="font-weight:600;font-size:0.875rem">&#128196; ' + escapeHtml(c.file) + '</span>' +
+                '<span style="font-size:0.8rem;color:var(--text-secondary)">' + (c.replacements || 0) + ' replacement(s)</span>' +
+            '</div>';
+            if (lineChanges.length > 0) {
+                html += '<div style="font-family:monospace;font-size:0.8rem">';
+                lineChanges.forEach(function(lc) {
+                    html += '<div style="display:flex;gap:0">' +
+                        '<span style="width:3.5rem;padding:0.3rem 0.5rem;color:var(--text-secondary);background:var(--surface-alt,#f8f9fa);border-right:1px solid var(--border,#e2e8f0);text-align:right;flex-shrink:0">L' + escapeHtml(lc.line) + '</span>' +
+                        '<div style="flex:1;overflow:auto">' +
+                            '<div style="padding:0.25rem 0.75rem;background:#fff5f5;color:#c53030;white-space:nowrap">- ' + escapeHtml(lc.before) + '</div>' +
+                            '<div style="padding:0.25rem 0.75rem;background:#f0fff4;color:#276749;white-space:nowrap">+ ' + escapeHtml(lc.after) + '</div>' +
+                        '</div>' +
+                    '</div>';
+                });
+                html += '</div>';
+            }
+            html += '</div>';
+        });
+    } else if (findings.length > 0) {
+        html += '<h3 style="margin:1.5rem 0 0.75rem;font-size:1rem">Nexus References Detected (' + findings.length + ' file(s))</h3>';
+        findings.forEach(function(f) {
+            html += '<div style="border:1px solid var(--border,#e2e8f0);border-radius:8px;margin-bottom:0.75rem;overflow:hidden">';
+            html += '<div style="padding:0.6rem 1rem;background:var(--surface-alt,#f8f9fa);display:flex;justify-content:space-between">' +
+                '<span style="font-weight:600;font-size:0.875rem">&#128196; ' + escapeHtml(f.file) + '</span>' +
+                '<span style="font-size:0.8rem;color:var(--text-secondary)">' + (f.referenceCount || 0) + ' reference(s)</span>' +
+            '</div>';
+            var refs = f.references || [];
+            if (refs.length > 0) {
+                html += '<div style="font-family:monospace;font-size:0.8rem">';
+                refs.forEach(function(ref) {
+                    html += '<div style="display:flex;gap:0">' +
+                        '<span style="width:3.5rem;padding:0.3rem 0.5rem;color:var(--text-secondary);background:var(--surface-alt,#f8f9fa);border-right:1px solid var(--border,#e2e8f0);text-align:right;flex-shrink:0">L' + (ref.line || '') + '</span>' +
+                        '<div style="padding:0.3rem 0.75rem;white-space:nowrap;overflow:auto">' + escapeHtml(ref.context || '') + '</div>' +
+                    '</div>';
+                });
+                html += '</div>';
+            }
+            html += '</div>';
+        });
+    }
+
+    container.innerHTML = html;
+}

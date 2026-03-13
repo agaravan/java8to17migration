@@ -18,7 +18,8 @@
             </div>
             <nav>
                 <button class="nav-btn" data-view="dashboard" onclick="showView('dashboard')">Dashboard</button>
-                <button class="nav-btn active" data-view="migrate" onclick="showView('migrate')">New Migration</button>
+                <button class="nav-btn active" data-view="migrate" onclick="showView('migrate')">Java Migration</button>
+                <button class="nav-btn" data-view="nexus" onclick="showView('nexus')">Nexus &#8594; Artifactory</button>
                 <button class="nav-btn" data-view="history" onclick="showView('history')">History</button>
                 <button class="nav-btn" data-view="recipes" onclick="showView('recipes')">Recipes</button>
             </nav>
@@ -124,6 +125,74 @@
                     <h2>Migration Report</h2>
                 </div>
                 <div id="report-content"></div>
+            </div>
+        </section>
+
+        <section id="nexus-view" class="view">
+            <div class="card">
+                <div class="card-header">
+                    <h2>Nexus &#8594; Artifactory Migration</h2>
+                    <p>Scan a local Maven project and replace Nexus repository URLs with Artifactory URLs across all pom.xml and settings.xml files</p>
+                </div>
+                <form id="nexus-form" onsubmit="startNexusMigration(event)">
+                    <div class="form-group">
+                        <label for="nexus-project-path">Project Path (Local Directory)</label>
+                        <input type="text" id="nexus-project-path" placeholder="C:\Jenkins\workspace\my-project  or  /opt/projects/my-app" required>
+                        <span class="hint">Absolute path to the root of the Maven project on this server</span>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group flex-1">
+                            <label for="nexus-url">Nexus Base URL</label>
+                            <input type="url" id="nexus-url" placeholder="https://nexus.company.com" required>
+                            <span class="hint">Base URL of the Nexus instance (without trailing slash)</span>
+                        </div>
+                        <div class="form-group flex-1">
+                            <label for="artifactory-url">Artifactory Base URL</label>
+                            <input type="url" id="artifactory-url" placeholder="https://artifactory.company.com/artifactory" required>
+                            <span class="hint">Base URL of the Artifactory instance (without trailing slash)</span>
+                        </div>
+                    </div>
+                    <details class="credentials-section">
+                        <summary>Repository Path Mappings (Optional)</summary>
+                        <p style="margin: 0.5rem 0 0.75rem; font-size: 0.85rem; color: var(--text-secondary);">
+                            If your Nexus and Artifactory use different repository path names, add mappings below.
+                            Example: <code>/repository/maven-releases</code> &#8594; <code>/libs-release</code>
+                        </p>
+                        <div id="repo-mappings-list">
+                            <div class="form-row repo-mapping-row">
+                                <div class="form-group flex-1">
+                                    <input type="text" class="mapping-from" placeholder="Nexus path  (e.g. /repository/maven-releases)">
+                                </div>
+                                <div style="display:flex;align-items:center;padding:0 0.5rem;color:var(--text-secondary);">&#8594;</div>
+                                <div class="form-group flex-1">
+                                    <input type="text" class="mapping-to" placeholder="Artifactory path  (e.g. /libs-release)">
+                                </div>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-sm" onclick="addMappingRow()" style="margin-top:0.5rem">+ Add Mapping</button>
+                    </details>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary" id="nexus-submit-btn">
+                            <span class="btn-text">Start Migration</span>
+                            <span class="btn-loading" style="display:none">Processing...</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <div id="nexus-progress" class="card" style="display:none">
+                <div class="card-header">
+                    <h2>Migration Progress</h2>
+                    <span id="nexus-status-badge" class="status-badge">In Progress</span>
+                </div>
+                <div id="nexus-progress-steps" class="steps-container"></div>
+            </div>
+
+            <div id="nexus-report" class="card" style="display:none">
+                <div class="card-header">
+                    <h2>Migration Report</h2>
+                </div>
+                <div id="nexus-report-content"></div>
             </div>
         </section>
 
