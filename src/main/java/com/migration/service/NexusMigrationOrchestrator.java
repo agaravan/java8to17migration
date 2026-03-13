@@ -1,6 +1,7 @@
 package com.migration.service;
 
 import com.migration.model.NexusJob;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -15,31 +16,51 @@ public class NexusMigrationOrchestrator {
     private final ExecutorService executor = Executors.newFixedThreadPool(2);
     private final AtomicInteger activeJobs = new AtomicInteger(0);
 
+    private final GitService gitService;
     private final NexusAnalysisService analysisService;
     private final NexusMigrationService migrationService;
 
-    public NexusMigrationOrchestrator(NexusAnalysisService analysisService,
+    @Value("${migration.max-concurrent:3}")
+    private int maxConcurrent;
+
+    public NexusMigrationOrchestrator(GitService gitService,
+                                       NexusAnalysisService analysisService,
                                        NexusMigrationService migrationService) {
+        this.gitService = gitService;
         this.analysisService = analysisService;
         this.migrationService = migrationService;
     }
 
-    public NexusJob startMigration(String projectPath, String nexusUrl,
-                                    String artifactoryUrl, Map<String, String> repoMappings) {
+    public NexusJob startMigration(String repoUrl, String branch,
+                                    String username, String password,
+                                    boolean pushToNewBranch, String targetBranchName,
+                                    String nexusUrl, String artifactoryUrl,
+                                    Map<String, String> repoMappings) {
+        if (activeJobs.get() >= maxConcurrent) {
+            throw new IllegalStateException("Maximum " + maxConcurrent + " concurrent jobs allowed. Please wait.");
+        }
         String id = UUID.randomUUID().toString().replace("-", "").substring(0, 10);
-        NexusJob job = new NexusJob(id, projectPath, nexusUrl, artifactoryUrl);
+        NexusJob job = new NexusJob(id, repoUrl, branch, nexusUrl, artifactoryUrl, pushToNewBranch, targetBranchName);
         jobs.put(id, job);
-        executor.submit(() -> runMigration(job, repoMappings));
+        executor.submit(() -> runMigration(job, username, password, repoMappings));
         return job;
     }
 
-    private void runMigration(NexusJob job, Map<String, String> repoMappings) {
+    private void runMigration(NexusJob job, String username, String password,
+                               Map<String, String> repoMappings) {
         activeJobs.incrementAndGet();
+        String clonePath = null;
         try {
             job.setStatus("in_progress");
 
-            job.updateStep("scan", "in_progress", "Scanning project for pom.xml and settings.xml files...");
-            Map<String, Object> analysis = analysisService.analyze(job.getProjectPath(), job.getNexusUrl());
+            job.updateStep("clone", "in_progress", "Cloning repository from Bitbucket...");
+            boolean fullClone = job.isPushToNewBranch();
+            clonePath = gitService.cloneRepo(job.getRepoUrl(), job.getBranch(), job.getId(),
+                    username, password, fullClone);
+            job.updateStep("clone", "completed", "Repository cloned — branch: " + job.getBranch());
+
+            job.updateStep("scan", "in_progress", "Scanning for pom.xml and settings.xml files...");
+            Map<String, Object> analysis = analysisService.analyze(clonePath, job.getNexusUrl());
 
             @SuppressWarnings("unchecked")
             List<String> pomFiles = (List<String>) analysis.getOrDefault("pomFiles", List.of());
@@ -47,8 +68,8 @@ public class NexusMigrationOrchestrator {
             List<String> settingsFiles = (List<String>) analysis.getOrDefault("settingsFiles", List.of());
             int total = pomFiles.size() + settingsFiles.size();
             job.updateStep("scan", "completed",
-                String.format("Found %d file(s): %d pom.xml, %d settings.xml",
-                    total, pomFiles.size(), settingsFiles.size()));
+                    String.format("Found %d file(s): %d pom.xml, %d settings.xml",
+                            total, pomFiles.size(), settingsFiles.size()));
 
             job.updateStep("analyze", "in_progress", "Analyzing Nexus repository references...");
             int filesWithNexus = (int) analysis.getOrDefault("filesWithNexus", 0);
@@ -56,30 +77,47 @@ public class NexusMigrationOrchestrator {
 
             if (filesWithNexus == 0) {
                 job.updateStep("analyze", "completed",
-                    "No Nexus URL references found in " + total + " file(s) scanned");
+                        "No Nexus URL references found in " + total + " file(s) scanned");
                 job.updateStep("migrate", "completed", "No changes required — project has no Nexus references");
+                if (job.isPushToNewBranch()) {
+                    job.updateStep("push", "completed", "Nothing to push — no Nexus references found");
+                }
                 job.updateStep("report", "completed", "Report ready");
-                job.setReport(buildReport(analysis, null, job));
+                job.setReport(buildReport(analysis, null, null, job));
                 job.markStatus("completed");
                 return;
             }
             job.updateStep("analyze", "completed",
-                String.format("Found %d Nexus reference(s) across %d file(s)", totalRefs, filesWithNexus));
+                    String.format("Found %d Nexus reference(s) across %d file(s)", totalRefs, filesWithNexus));
 
             job.updateStep("migrate", "in_progress",
-                String.format("Replacing %d Nexus URL(s) with Artifactory URLs...", totalRefs));
+                    String.format("Replacing %d Nexus URL(s) with Artifactory URLs...", totalRefs));
             Map<String, Object> migrationResult = migrationService.migrate(
-                job.getProjectPath(), job.getNexusUrl(), job.getArtifactoryUrl(), repoMappings, analysis);
+                    clonePath, job.getNexusUrl(), job.getArtifactoryUrl(), repoMappings, analysis);
             int filesModified = (int) migrationResult.getOrDefault("filesModified", 0);
             int replacements = (int) migrationResult.getOrDefault("totalReplacements", 0);
             job.updateStep("migrate", "completed",
-                String.format("Updated %d file(s) — %d URL replacement(s) applied", filesModified, replacements));
+                    String.format("Updated %d file(s) — %d URL replacement(s) applied", filesModified, replacements));
+
+            Map<String, Object> pushResult = null;
+            if (job.isPushToNewBranch()) {
+                job.updateStep("push", "in_progress", "Pushing changes to new branch...");
+                pushResult = gitService.commitAndPushNexus(
+                        clonePath, job.getTargetBranchName(),
+                        username, password,
+                        job.getNexusUrl(), job.getArtifactoryUrl());
+                boolean pushed = Boolean.TRUE.equals(pushResult.get("pushed"));
+                String pushedBranch = (String) pushResult.get("branch");
+                job.updateStep("push", pushed ? "completed" : "failed",
+                        (String) pushResult.getOrDefault("message",
+                                pushed ? "Pushed to " + pushedBranch : "Push failed"));
+            }
 
             job.updateStep("report", "in_progress", "Generating migration report...");
-            Map<String, Object> report = buildReport(analysis, migrationResult, job);
+            Map<String, Object> report = buildReport(analysis, migrationResult, pushResult, job);
             job.setReport(report);
             job.updateStep("report", "completed",
-                String.format("Report ready — %d file(s) modified", filesModified));
+                    String.format("Report ready — %d file(s) modified", filesModified));
 
             job.markStatus("completed");
 
@@ -87,31 +125,37 @@ public class NexusMigrationOrchestrator {
             job.markStatus("failed");
             job.setError(e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName());
             job.getSteps().stream()
-                .filter(s -> "in_progress".equals(s.getStatus()))
-                .findFirst()
-                .ifPresent(s -> { s.setStatus("failed"); s.setMessage(e.getMessage()); });
+                    .filter(s -> "in_progress".equals(s.getStatus()))
+                    .findFirst()
+                    .ifPresent(s -> { s.setStatus("failed"); s.setMessage(e.getMessage()); });
         } finally {
             activeJobs.decrementAndGet();
+            if (clonePath != null) {
+                gitService.cleanup(clonePath);
+            }
         }
     }
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> buildReport(Map<String, Object> analysis,
                                               Map<String, Object> migrationResult,
+                                              Map<String, Object> pushResult,
                                               NexusJob job) {
         Map<String, Object> report = new LinkedHashMap<>();
 
-        Map<String, Object> summary = new LinkedHashMap<>();
         List<String> pomFiles = (List<String>) analysis.getOrDefault("pomFiles", List.of());
         List<String> settingsFiles = (List<String>) analysis.getOrDefault("settingsFiles", List.of());
+
+        Map<String, Object> summary = new LinkedHashMap<>();
+        summary.put("repoUrl", job.getRepoUrl());
+        summary.put("branch", job.getBranch());
+        summary.put("nexusUrl", job.getNexusUrl());
+        summary.put("artifactoryUrl", job.getArtifactoryUrl());
         summary.put("pomFilesScanned", pomFiles.size());
         summary.put("settingsFilesScanned", settingsFiles.size());
         summary.put("totalFilesScanned", pomFiles.size() + settingsFiles.size());
         summary.put("filesWithNexusRefs", analysis.getOrDefault("filesWithNexus", 0));
         summary.put("totalNexusReferences", analysis.getOrDefault("totalReferences", 0));
-        summary.put("nexusUrl", job.getNexusUrl());
-        summary.put("artifactoryUrl", job.getArtifactoryUrl());
-        summary.put("projectPath", job.getProjectPath());
         summary.put("timeTaken", job.getTimeTaken());
 
         if (migrationResult != null) {
@@ -121,6 +165,12 @@ public class NexusMigrationOrchestrator {
         } else {
             summary.put("filesModified", 0);
             summary.put("totalReplacements", 0);
+        }
+
+        if (pushResult != null) {
+            summary.put("pushed", pushResult.get("pushed"));
+            summary.put("pushedBranch", pushResult.get("branch"));
+            summary.put("pushMessage", pushResult.get("message"));
         }
 
         report.put("summary", summary);

@@ -614,6 +614,11 @@ var nexusPollingInterval = null;
 
 function loadNexusHistory() {}
 
+function toggleNexusTargetBranch() {
+    var checked = document.getElementById('nexus-push-to-branch').checked;
+    document.getElementById('nexus-target-branch-group').style.display = checked ? 'block' : 'none';
+}
+
 function addMappingRow() {
     var list = document.getElementById('repo-mappings-list');
     var row = document.createElement('div');
@@ -634,11 +639,21 @@ function addMappingRow() {
 function startNexusMigration(e) {
     e.preventDefault();
 
-    var projectPath = document.getElementById('nexus-project-path').value.trim();
+    var repoUrl = document.getElementById('nexus-repo-url').value.trim();
+    var branch = document.getElementById('nexus-branch').value.trim();
     var nexusUrl = document.getElementById('nexus-url').value.trim();
     var artifactoryUrl = document.getElementById('artifactory-url').value.trim();
+    var pushToNewBranch = document.getElementById('nexus-push-to-branch').checked;
+    var targetBranchName = document.getElementById('nexus-target-branch').value.trim();
+    var username = document.getElementById('nexus-username').value.trim();
+    var password = document.getElementById('nexus-password').value.trim();
 
-    if (!projectPath || !nexusUrl || !artifactoryUrl) return;
+    if (!repoUrl || !branch || !nexusUrl || !artifactoryUrl) return;
+
+    if (pushToNewBranch && (!username || !password)) {
+        alert('Username and app password/token are required when pushing to a new branch.');
+        return;
+    }
 
     var repoMappings = {};
     document.querySelectorAll('.repo-mapping-row').forEach(function(row) {
@@ -661,9 +676,14 @@ function startNexusMigration(e) {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
-            projectPath: projectPath,
+            repoUrl: repoUrl,
+            branch: branch,
             nexusUrl: nexusUrl,
             artifactoryUrl: artifactoryUrl,
+            pushToNewBranch: pushToNewBranch,
+            targetBranchName: targetBranchName,
+            username: username,
+            password: password,
             repoMappings: Object.keys(repoMappings).length > 0 ? repoMappings : null
         })
     })
@@ -724,14 +744,19 @@ function pollNexusJob(jobId) {
 
 function renderNexusSteps(steps) {
     var LABELS = {
+        clone: 'Clone Repository',
         scan: 'Scan Project Files',
         analyze: 'Analyze Nexus References',
         migrate: 'Apply URL Replacements',
+        push: 'Push to New Branch',
         report: 'Generate Report'
     };
-    var ORDER = ['scan', 'analyze', 'migrate', 'report'];
     var byName = {};
     steps.forEach(function(s) { byName[s.name] = s; });
+    var REQUIRED = ['clone', 'scan', 'analyze', 'migrate', 'report'];
+    var ORDER = ['clone', 'scan', 'analyze', 'migrate', 'push', 'report'].filter(function(name) {
+        return REQUIRED.indexOf(name) >= 0 || byName[name] !== undefined;
+    });
 
     var html = '';
     ORDER.forEach(function(name) {
@@ -758,6 +783,10 @@ function renderNexusReport(report) {
     var findings = report.findings || [];
 
     var html = '<div class="report-summary"><div class="summary-grid">';
+    html += '<div class="summary-item"><div class="summary-label">Repository</div>' +
+            '<div class="summary-value" style="font-size:0.8rem;word-break:break-all">' + escapeHtml((summary.repoUrl || '').replace(/^https?:\/\//, '')) + '</div></div>';
+    html += '<div class="summary-item"><div class="summary-label">Branch</div>' +
+            '<div class="summary-value">' + escapeHtml(summary.branch || '-') + '</div></div>';
     html += '<div class="summary-item"><div class="summary-label">Files Scanned</div>' +
             '<div class="summary-value">' + (summary.totalFilesScanned || 0) + '</div></div>';
     html += '<div class="summary-item"><div class="summary-label">Files with Nexus</div>' +
@@ -775,7 +804,19 @@ function renderNexusReport(report) {
         '<code style="background:#fee2e2;padding:0.2rem 0.5rem;border-radius:4px">' + escapeHtml(summary.nexusUrl || '') + '</code>' +
         '<span style="color:var(--text-secondary)">&#8594;</span>' +
         '<code style="background:#dcfce7;padding:0.2rem 0.5rem;border-radius:4px">' + escapeHtml(summary.artifactoryUrl || '') + '</code>' +
-    '</div></div>';
+    '</div>';
+
+    if (summary.pushedBranch) {
+        var pushOk = summary.pushed === true;
+        html += '<div style="margin-top:0.75rem;padding:0.75rem 1rem;border-radius:6px;font-size:0.875rem;' +
+            (pushOk ? 'background:#f0fff4;border:1px solid #9ae6b4;color:#276749' : 'background:#fff5f5;border:1px solid #fed7d7;color:#c53030') + '">' +
+            (pushOk ? '&#10003; ' : '&#10007; ') +
+            '<strong>' + (pushOk ? 'Pushed to branch: ' : 'Push failed — ') + '</strong>' +
+            escapeHtml(pushOk ? summary.pushedBranch : (summary.pushMessage || '')) +
+        '</div>';
+    }
+
+    html += '</div>';
 
     if ((summary.filesWithNexusRefs || 0) === 0) {
         html += '<p class="empty-state" style="margin-top:1.5rem">No Nexus references found — project is already Artifactory-clean.</p>';

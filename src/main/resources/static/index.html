@@ -132,30 +132,62 @@
             <div class="card">
                 <div class="card-header">
                     <h2>Nexus &#8594; Artifactory Migration</h2>
-                    <p>Scan a local Maven project and replace Nexus repository URLs with Artifactory URLs across all pom.xml and settings.xml files</p>
+                    <p>Clone a Bitbucket repository and replace all Nexus repository URLs with Artifactory URLs across pom.xml and settings.xml files, then push to a new branch</p>
                 </div>
                 <form id="nexus-form" onsubmit="startNexusMigration(event)">
                     <div class="form-group">
-                        <label for="nexus-project-path">Project Path (Local Directory)</label>
-                        <input type="text" id="nexus-project-path" placeholder="C:\Jenkins\workspace\my-project  or  /opt/projects/my-app" required>
-                        <span class="hint">Absolute path to the root of the Maven project on this server</span>
+                        <label for="nexus-repo-url">Bitbucket Repository URL</label>
+                        <input type="url" id="nexus-repo-url" placeholder="https://bitbucket.org/your-org/your-project.git" required>
+                        <span class="hint">HTTPS clone URL of your Bitbucket repository</span>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group flex-1">
+                            <label for="nexus-branch">Branch</label>
+                            <input type="text" id="nexus-branch" placeholder="develop" value="develop" required>
+                            <span class="hint">Branch to clone and migrate</span>
+                        </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group flex-1">
                             <label for="nexus-url">Nexus Base URL</label>
                             <input type="url" id="nexus-url" placeholder="https://nexus.company.com" required>
-                            <span class="hint">Base URL of the Nexus instance (without trailing slash)</span>
+                            <span class="hint">Source Nexus instance URL (no trailing slash)</span>
                         </div>
                         <div class="form-group flex-1">
                             <label for="artifactory-url">Artifactory Base URL</label>
                             <input type="url" id="artifactory-url" placeholder="https://artifactory.company.com/artifactory" required>
-                            <span class="hint">Base URL of the Artifactory instance (without trailing slash)</span>
+                            <span class="hint">Target Artifactory instance URL (no trailing slash)</span>
                         </div>
                     </div>
+                    <div class="form-group push-option">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="nexus-push-to-branch" onchange="toggleNexusTargetBranch()">
+                            <span>Push migrated code to a new branch</span>
+                        </label>
+                        <span class="hint">Commits and pushes the URL replacements to a new branch in the same repository (requires authentication)</span>
+                    </div>
+                    <div id="nexus-target-branch-group" class="form-group" style="display:none">
+                        <label for="nexus-target-branch">Target Branch Name (Optional)</label>
+                        <input type="text" id="nexus-target-branch" placeholder="nexus-to-artifactory/20260313-120000">
+                        <span class="hint">Leave empty for auto-generated name: nexus-to-artifactory/{timestamp}</span>
+                    </div>
+                    <details class="credentials-section">
+                        <summary>Authentication (Optional)</summary>
+                        <div class="form-row">
+                            <div class="form-group flex-1">
+                                <label for="nexus-username">Username</label>
+                                <input type="text" id="nexus-username" placeholder="bitbucket-username">
+                            </div>
+                            <div class="form-group flex-1">
+                                <label for="nexus-password">App Password / Token</label>
+                                <input type="password" id="nexus-password" placeholder="app-password-or-token">
+                            </div>
+                        </div>
+                    </details>
                     <details class="credentials-section">
                         <summary>Repository Path Mappings (Optional)</summary>
                         <p style="margin: 0.5rem 0 0.75rem; font-size: 0.85rem; color: var(--text-secondary);">
-                            If your Nexus and Artifactory use different repository path names, add mappings below.
+                            If your Nexus and Artifactory use different path segments, map them here.
                             Example: <code>/repository/maven-releases</code> &#8594; <code>/libs-release</code>
                         </p>
                         <div id="repo-mappings-list">

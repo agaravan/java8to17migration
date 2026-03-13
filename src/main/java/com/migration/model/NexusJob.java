@@ -9,9 +9,12 @@ import java.util.Map;
 
 public class NexusJob {
     private String id;
-    private String projectPath;
+    private String repoUrl;
+    private String branch;
     private String nexusUrl;
     private String artifactoryUrl;
+    private boolean pushToNewBranch;
+    private String targetBranchName;
     private String status;
     private Instant createdAt;
     private Instant completedAt;
@@ -21,11 +24,16 @@ public class NexusJob {
 
     public NexusJob() { this.steps = new ArrayList<>(); }
 
-    public NexusJob(String id, String projectPath, String nexusUrl, String artifactoryUrl) {
+    public NexusJob(String id, String repoUrl, String branch,
+                    String nexusUrl, String artifactoryUrl,
+                    boolean pushToNewBranch, String targetBranchName) {
         this.id = id;
-        this.projectPath = projectPath;
+        this.repoUrl = repoUrl;
+        this.branch = branch;
         this.nexusUrl = nexusUrl;
         this.artifactoryUrl = artifactoryUrl;
+        this.pushToNewBranch = pushToNewBranch;
+        this.targetBranchName = targetBranchName;
         this.status = "queued";
         this.createdAt = Instant.now();
         this.steps = new ArrayList<>();
@@ -63,12 +71,18 @@ public class NexusJob {
 
     public String getId() { return id; }
     public void setId(String id) { this.id = id; }
-    public String getProjectPath() { return projectPath; }
-    public void setProjectPath(String projectPath) { this.projectPath = projectPath; }
+    public String getRepoUrl() { return repoUrl; }
+    public void setRepoUrl(String repoUrl) { this.repoUrl = repoUrl; }
+    public String getBranch() { return branch; }
+    public void setBranch(String branch) { this.branch = branch; }
     public String getNexusUrl() { return nexusUrl; }
     public void setNexusUrl(String nexusUrl) { this.nexusUrl = nexusUrl; }
     public String getArtifactoryUrl() { return artifactoryUrl; }
     public void setArtifactoryUrl(String artifactoryUrl) { this.artifactoryUrl = artifactoryUrl; }
+    public boolean isPushToNewBranch() { return pushToNewBranch; }
+    public void setPushToNewBranch(boolean pushToNewBranch) { this.pushToNewBranch = pushToNewBranch; }
+    public String getTargetBranchName() { return targetBranchName; }
+    public void setTargetBranchName(String targetBranchName) { this.targetBranchName = targetBranchName; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
     public Instant getCreatedAt() { return createdAt; }
