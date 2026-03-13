@@ -27,7 +27,7 @@ public class MigrationExecutorService {
         for (String pomFile : pomFiles) {
             Map<String, Object> change = new LinkedHashMap<>();
             change.put("file", Path.of(pomFile).getFileName().toString());
-            change.put("changes", List.of(
+            List<String> changes = new ArrayList<>(List.of(
                     "Updated maven.compiler.source to " + tv,
                     "Updated maven.compiler.target to " + tv,
                     "Added maven.compiler.release=" + tv,
@@ -41,6 +41,16 @@ public class MigrationExecutorService {
                     "Added OpenRewrite maven plugin v" + OPENREWRITE_PLUGIN_VERSION,
                     "Added rewrite-migrate-java v" + REWRITE_RECIPE_VERSION
             ));
+            if (Boolean.TRUE.equals(analysis.get("hasLombok")) && targetVersion >= 17) {
+                changes.add("Upgraded lombok dependency to 1.18.30 (required for Java 17 compiler compatibility)");
+            }
+            if (Boolean.TRUE.equals(analysis.get("hasJaxws"))) {
+                changes.add("Injected javax.xml.ws:jaxws-api:2.3.1 dependency (JAX-WS removed from JDK in Java 11)");
+            }
+            if (Boolean.TRUE.equals(analysis.get("hasJunit4"))) {
+                changes.add("Added surefire-junit47:3.2.5 to surefire and failsafe plugin dependencies (prevents NoClassDefFoundError)");
+            }
+            change.put("changes", changes);
             pomChanges.add(change);
         }
 

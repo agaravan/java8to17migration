@@ -31,6 +31,9 @@ public class RewriteConfigService {
     private static final String MAVEN_JAR_PLUGIN_VERSION = "3.3.0";
     private static final String MAVEN_WAR_PLUGIN_VERSION = "3.4.0";
     private static final String MAVEN_DEPENDENCY_PLUGIN_VERSION = "3.6.1";
+    private static final String LOMBOK_VERSION = "1.18.30";
+    private static final String JAXWS_API_VERSION = "2.3.1";
+    private static final String SUREFIRE_JUNIT47_VERSION = "3.2.5";
 
     public Map<String, Object> configureRewrite(String projectPath, Map<String, Object> analysis, int targetVersion) throws Exception {
         List<String> recipes = buildRecipeList(analysis, targetVersion);
@@ -140,11 +143,22 @@ public class RewriteConfigService {
 
         upgradeMavenCompilerPlugin(doc, plugins, targetJavaVersion);
         upgradeMavenResourcesPlugin(doc, plugins);
-        upgradeMavenSurefirePlugin(doc, plugins);
-        upgradePluginIfExists(doc, plugins, "maven-failsafe-plugin", "org.apache.maven.plugins", MAVEN_FAILSAFE_PLUGIN_VERSION);
+        upgradeMavenSurefirePlugin(doc, plugins, analysis);
+        upgradeFailsafePlugin(doc, plugins, analysis);
         upgradePluginIfExists(doc, plugins, "maven-jar-plugin", "org.apache.maven.plugins", MAVEN_JAR_PLUGIN_VERSION);
         upgradePluginIfExists(doc, plugins, "maven-war-plugin", "org.apache.maven.plugins", MAVEN_WAR_PLUGIN_VERSION);
         upgradePluginIfExists(doc, plugins, "maven-dependency-plugin", "org.apache.maven.plugins", MAVEN_DEPENDENCY_PLUGIN_VERSION);
+
+        boolean hasLombok = Boolean.TRUE.equals(analysis.get("hasLombok"));
+        boolean hasJaxws = Boolean.TRUE.equals(analysis.get("hasJaxws"));
+        int tv = Integer.parseInt(targetJavaVersion);
+
+        if (hasLombok && tv >= 17) {
+            upgradeLombokDependency(doc, project);
+        }
+        if (hasJaxws) {
+            injectJaxwsApiDependency(doc, project);
+        }
 
         Element existingRewrite = findPluginByArtifactId(plugins, "rewrite-maven-plugin");
         if (existingRewrite != null) {
@@ -244,7 +258,8 @@ public class RewriteConfigService {
         }
     }
 
-    private void upgradeMavenSurefirePlugin(Document doc, Element plugins) {
+    private void upgradeMavenSurefirePlugin(Document doc, Element plugins, Map<String, Object> analysis) {
+        boolean hasJunit4 = Boolean.TRUE.equals(analysis.get("hasJunit4"));
         Element existing = findPluginByArtifactId(plugins, "maven-surefire-plugin");
         if (existing != null) {
             NodeList children = existing.getChildNodes();
@@ -262,13 +277,141 @@ public class RewriteConfigService {
                 versionEl.setTextContent(MAVEN_SUREFIRE_PLUGIN_VERSION);
                 existing.insertBefore(versionEl, existing.getFirstChild());
             }
+            if (hasJunit4) {
+                injectSurefireJunit47Dep(doc, existing);
+            }
         } else {
             Element plugin = doc.createElement("plugin");
             appendTextElement(doc, plugin, "groupId", "org.apache.maven.plugins");
             appendTextElement(doc, plugin, "artifactId", "maven-surefire-plugin");
             appendTextElement(doc, plugin, "version", MAVEN_SUREFIRE_PLUGIN_VERSION);
+            if (hasJunit4) {
+                injectSurefireJunit47Dep(doc, plugin);
+            }
             plugins.appendChild(plugin);
         }
+    }
+
+    private void upgradeFailsafePlugin(Document doc, Element plugins, Map<String, Object> analysis) {
+        boolean hasJunit4 = Boolean.TRUE.equals(analysis.get("hasJunit4"));
+        Element existing = findPluginByArtifactId(plugins, "maven-failsafe-plugin");
+        if (existing == null) return;
+        NodeList children = existing.getChildNodes();
+        boolean hasVersion = false;
+        for (int i = 0; i < children.getLength(); i++) {
+            Node child = children.item(i);
+            if (child instanceof Element && "version".equals(child.getNodeName())) {
+                child.setTextContent(MAVEN_FAILSAFE_PLUGIN_VERSION);
+                hasVersion = true;
+                break;
+            }
+        }
+        if (!hasVersion) {
+            Element versionEl = doc.createElement("version");
+            versionEl.setTextContent(MAVEN_FAILSAFE_PLUGIN_VERSION);
+            existing.insertBefore(versionEl, existing.getFirstChild());
+        }
+        if (hasJunit4) {
+            injectSurefireJunit47Dep(doc, existing);
+        }
+    }
+
+    private void injectSurefireJunit47Dep(Document doc, Element pluginElement) {
+        Element depsContainer = null;
+        NodeList children = pluginElement.getChildNodes();
+        for (int i = 0; i < children.getLength(); i++) {
+            Node child = children.item(i);
+            if (child instanceof Element && "dependencies".equals(child.getNodeName())) {
+                depsContainer = (Element) child;
+                break;
+            }
+        }
+        if (depsContainer == null) {
+            depsContainer = doc.createElement("dependencies");
+            pluginElement.appendChild(depsContainer);
+        }
+        NodeList existing = depsContainer.getElementsByTagName("artifactId");
+        for (int i = 0; i < existing.getLength(); i++) {
+            if ("surefire-junit47".equals(existing.item(i).getTextContent().trim())) return;
+        }
+        Element dep = doc.createElement("dependency");
+        appendTextElement(doc, dep, "groupId", "org.apache.maven.surefire");
+        appendTextElement(doc, dep, "artifactId", "surefire-junit47");
+        appendTextElement(doc, dep, "version", SUREFIRE_JUNIT47_VERSION);
+        depsContainer.appendChild(dep);
+    }
+
+    private void upgradeLombokDependency(Document doc, Element project) {
+        Element dependenciesEl = null;
+        NodeList children = project.getChildNodes();
+        for (int i = 0; i < children.getLength(); i++) {
+            Node child = children.item(i);
+            if (child instanceof Element && "dependencies".equals(child.getNodeName())) {
+                dependenciesEl = (Element) child;
+                break;
+            }
+        }
+        if (dependenciesEl == null) {
+            dependenciesEl = doc.createElement("dependencies");
+            project.appendChild(dependenciesEl);
+        }
+        NodeList depList = dependenciesEl.getElementsByTagName("dependency");
+        for (int i = 0; i < depList.getLength(); i++) {
+            Element dep = (Element) depList.item(i);
+            NodeList artIds = dep.getElementsByTagName("artifactId");
+            if (artIds.getLength() > 0 && "lombok".equals(artIds.item(0).getTextContent().trim())) {
+                NodeList versions = dep.getElementsByTagName("version");
+                if (versions.getLength() > 0) {
+                    versions.item(0).setTextContent(LOMBOK_VERSION);
+                } else {
+                    appendTextElement(doc, dep, "version", LOMBOK_VERSION);
+                }
+                NodeList scopes = dep.getElementsByTagName("scope");
+                if (scopes.getLength() == 0) {
+                    appendTextElement(doc, dep, "scope", "provided");
+                }
+                return;
+            }
+        }
+        Element dep = doc.createElement("dependency");
+        appendTextElement(doc, dep, "groupId", "org.projectlombok");
+        appendTextElement(doc, dep, "artifactId", "lombok");
+        appendTextElement(doc, dep, "version", LOMBOK_VERSION);
+        appendTextElement(doc, dep, "scope", "provided");
+        dependenciesEl.appendChild(dep);
+    }
+
+    private void injectJaxwsApiDependency(Document doc, Element project) {
+        Element dependenciesEl = null;
+        NodeList children = project.getChildNodes();
+        for (int i = 0; i < children.getLength(); i++) {
+            Node child = children.item(i);
+            if (child instanceof Element && "dependencies".equals(child.getNodeName())) {
+                dependenciesEl = (Element) child;
+                break;
+            }
+        }
+        if (dependenciesEl == null) {
+            dependenciesEl = doc.createElement("dependencies");
+            project.appendChild(dependenciesEl);
+        }
+        NodeList depList = dependenciesEl.getElementsByTagName("dependency");
+        for (int i = 0; i < depList.getLength(); i++) {
+            Element dep = (Element) depList.item(i);
+            NodeList artIds = dep.getElementsByTagName("artifactId");
+            if (artIds.getLength() > 0 && "jaxws-api".equals(artIds.item(0).getTextContent().trim())) {
+                NodeList versions = dep.getElementsByTagName("version");
+                if (versions.getLength() > 0) {
+                    versions.item(0).setTextContent(JAXWS_API_VERSION);
+                }
+                return;
+            }
+        }
+        Element dep = doc.createElement("dependency");
+        appendTextElement(doc, dep, "groupId", "javax.xml.ws");
+        appendTextElement(doc, dep, "artifactId", "jaxws-api");
+        appendTextElement(doc, dep, "version", JAXWS_API_VERSION);
+        dependenciesEl.appendChild(dep);
     }
 
     private void upgradePluginIfExists(Document doc, Element plugins, String artifactId, String groupId, String version) {

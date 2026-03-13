@@ -339,13 +339,13 @@ public class AnalysisService {
                     "org.openrewrite.java.migrate.javax.AddJaxbDependencies"));
         }
         if (Boolean.TRUE.equals(analysis.get("hasJaxws"))) {
-            recs.add(createRec("high", "Add JAX-WS Dependencies",
-                    "JAX-WS was removed from the JDK in Java 11. You need to add explicit dependencies.",
+            recs.add(createRec("high", "JAX-WS Dependency Injected",
+                    "JAX-WS was removed from the JDK in Java 11. javax.xml.ws:jaxws-api:2.3.1 has been automatically added to your pom.xml.",
                     "org.openrewrite.java.migrate.javax.AddJaxwsDependencies"));
         }
         if (Boolean.TRUE.equals(analysis.get("hasLombok"))) {
-            recs.add(createRec("medium", "Update Lombok for Java 17",
-                    "Lombok needs to be updated to a version that supports Java 17.",
+            recs.add(createRec("medium", "Lombok Upgraded to 1.18.30",
+                    "Lombok has been automatically upgraded to 1.18.30 in your pom.xml. Versions below 1.18.20 cause ExceptionInInitializerError with the Java 17 compiler due to strong encapsulation.",
                     "org.openrewrite.java.migrate.lombok.UpdateLombokToJava17"));
         }
         if (Boolean.TRUE.equals(analysis.get("hasSpringBoot"))) {
