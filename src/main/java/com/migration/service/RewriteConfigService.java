@@ -24,6 +24,7 @@ public class RewriteConfigService {
     private static final String OPENREWRITE_PLUGIN_VERSION = "5.42.2";
     private static final String REWRITE_RECIPE_VERSION = "2.25.0";
     private static final String MAVEN_COMPILER_PLUGIN_VERSION = "3.13.0";
+    private static final String MAVEN_RESOURCES_PLUGIN_VERSION = "3.3.1";
 
     public Map<String, Object> configureRewrite(String projectPath, Map<String, Object> analysis, int targetVersion) throws Exception {
         List<String> recipes = buildRecipeList(analysis, targetVersion);
@@ -130,6 +131,7 @@ public class RewriteConfigService {
         Element plugins = getOrCreateChild(doc, build, "plugins");
 
         upgradeMavenCompilerPlugin(doc, plugins, targetJavaVersion);
+        upgradeMavenResourcesPlugin(doc, plugins);
 
         Element existingRewrite = findPluginByArtifactId(plugins, "rewrite-maven-plugin");
         if (existingRewrite != null) {
@@ -217,6 +219,53 @@ public class RewriteConfigService {
             appendTextElement(doc, plugin, "version", MAVEN_COMPILER_PLUGIN_VERSION);
             Element config = doc.createElement("configuration");
             appendTextElement(doc, config, "release", targetJavaVersion);
+            plugin.appendChild(config);
+            plugins.appendChild(plugin);
+        }
+    }
+
+    private void upgradeMavenResourcesPlugin(Document doc, Element plugins) {
+        Element existing = findPluginByArtifactId(plugins, "maven-resources-plugin");
+
+        if (existing != null) {
+            NodeList children = existing.getChildNodes();
+            boolean hasVersion = false;
+            for (int i = 0; i < children.getLength(); i++) {
+                Node child = children.item(i);
+                if (child instanceof Element && "version".equals(child.getNodeName())) {
+                    child.setTextContent(MAVEN_RESOURCES_PLUGIN_VERSION);
+                    hasVersion = true;
+                    break;
+                }
+            }
+            if (!hasVersion) {
+                Element versionEl = doc.createElement("version");
+                versionEl.setTextContent(MAVEN_RESOURCES_PLUGIN_VERSION);
+                existing.insertBefore(versionEl, existing.getFirstChild());
+            }
+
+            Element config = null;
+            for (int i = 0; i < children.getLength(); i++) {
+                Node child = children.item(i);
+                if (child instanceof Element && "configuration".equals(child.getNodeName())) {
+                    config = (Element) child;
+                    break;
+                }
+            }
+            if (config != null) {
+                setChildText(doc, config, "encoding", "UTF-8");
+            } else {
+                config = doc.createElement("configuration");
+                appendTextElement(doc, config, "encoding", "UTF-8");
+                existing.appendChild(config);
+            }
+        } else {
+            Element plugin = doc.createElement("plugin");
+            appendTextElement(doc, plugin, "groupId", "org.apache.maven.plugins");
+            appendTextElement(doc, plugin, "artifactId", "maven-resources-plugin");
+            appendTextElement(doc, plugin, "version", MAVEN_RESOURCES_PLUGIN_VERSION);
+            Element config = doc.createElement("configuration");
+            appendTextElement(doc, config, "encoding", "UTF-8");
             plugin.appendChild(config);
             plugins.appendChild(plugin);
         }

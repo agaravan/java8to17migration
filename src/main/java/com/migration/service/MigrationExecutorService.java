@@ -32,6 +32,7 @@ public class MigrationExecutorService {
                     "Updated maven.compiler.target to " + tv,
                     "Added maven.compiler.release=" + tv,
                     "Upgraded maven-compiler-plugin to 3.13.0",
+                    "Upgraded maven-resources-plugin to 3.3.1",
                     "Added OpenRewrite maven plugin v" + OPENREWRITE_PLUGIN_VERSION,
                     "Added rewrite-migrate-java v" + REWRITE_RECIPE_VERSION
             ));
