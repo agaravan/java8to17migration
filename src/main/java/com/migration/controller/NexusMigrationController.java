@@ -43,6 +43,15 @@ public class NexusMigrationController {
             return ResponseEntity.badRequest().body(
                     Map.of("error", "Username and password/token are required when pushing to a new branch"));
         }
+        if (pushToNewBranch && targetBranchName != null && !targetBranchName.isBlank()) {
+            String b = targetBranchName.trim().toLowerCase();
+            if (b.equals("master") || b.equals("main") || b.equals("develop")
+                    || b.equals("release") || b.startsWith("release/")) {
+                return ResponseEntity.badRequest().body(Map.of("error",
+                        "Target branch '" + targetBranchName.trim() + "' is a protected branch. "
+                        + "Please choose a feature branch name (e.g. nexus-to-artifactory/myapp)."));
+            }
+        }
 
         @SuppressWarnings("unchecked")
         Map<String, String> repoMappings = request.containsKey("repoMappings")

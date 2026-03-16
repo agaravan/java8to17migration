@@ -23,6 +23,11 @@ function showView(viewName) {
     if (viewName === 'nexus') loadNexusHistory();
 }
 
+function isProtectedBranch(name) {
+    var b = name.trim().toLowerCase();
+    return b === 'master' || b === 'main' || b === 'develop' || b === 'release' || b.startsWith('release/');
+}
+
 function startMigration(e) {
     e.preventDefault();
 
@@ -50,6 +55,14 @@ function startMigration(e) {
 
     if (pushToNewBranch && !username && !password) {
         alert('Authentication is required when pushing to a new branch. Please provide credentials.');
+        submitBtn.disabled = false;
+        submitBtn.querySelector('.btn-text').style.display = 'inline';
+        submitBtn.querySelector('.btn-loading').style.display = 'none';
+        return;
+    }
+
+    if (pushToNewBranch && targetBranchName && isProtectedBranch(targetBranchName)) {
+        alert('Target branch "' + targetBranchName + '" is a protected branch.\n\nCannot push to: master, main, develop, or release branches.\n\nPlease choose a feature branch name, e.g. migration/jdk17-myapp');
         submitBtn.disabled = false;
         submitBtn.querySelector('.btn-text').style.display = 'inline';
         submitBtn.querySelector('.btn-loading').style.display = 'none';
@@ -652,6 +665,11 @@ function startNexusMigration(e) {
 
     if (pushToNewBranch && (!username || !password)) {
         alert('Username and app password/token are required when pushing to a new branch.');
+        return;
+    }
+
+    if (pushToNewBranch && targetBranchName && isProtectedBranch(targetBranchName)) {
+        alert('Target branch "' + targetBranchName + '" is a protected branch.\n\nCannot push to: master, main, develop, or release branches.\n\nPlease choose a feature branch name, e.g. nexus-to-artifactory/myapp');
         return;
     }
 

@@ -52,6 +52,16 @@ public class MigrationController {
                 return ResponseEntity.badRequest().body(
                         Map.of("error", "Authentication (username and password/token) is required when pushing to a new branch"));
             }
+            String targetBranch = request.getTargetBranchName();
+            if (targetBranch != null && !targetBranch.isBlank()) {
+                String b = targetBranch.trim().toLowerCase();
+                if (b.equals("master") || b.equals("main") || b.equals("develop")
+                        || b.equals("release") || b.startsWith("release/")) {
+                    return ResponseEntity.badRequest().body(Map.of("error",
+                            "Target branch '" + targetBranch.trim() + "' is a protected branch. "
+                            + "Please choose a feature branch name (e.g. migration/jdk17-myapp)."));
+                }
+            }
         }
 
         int sourceVersion = request.getSourceVersion();

@@ -88,7 +88,7 @@
                     <div id="target-branch-group" class="form-group" style="display:none">
                         <label for="target-branch">Target Branch Name (Optional)</label>
                         <input type="text" id="target-branch" placeholder="migration/jdk17-20260310-120000">
-                        <span class="hint">Leave empty for auto-generated name: migration/jdk{target}-{timestamp}</span>
+                        <span class="hint">Leave empty for auto-generated name: migration/jdk{target}-{timestamp}. Protected branches (master, main, develop, release) are not allowed.</span>
                     </div>
                     <details class="credentials-section">
                         <summary>Authentication (Optional)</summary>
@@ -169,7 +169,7 @@
                     <div id="nexus-target-branch-group" class="form-group" style="display:none">
                         <label for="nexus-target-branch">Target Branch Name (Optional)</label>
                         <input type="text" id="nexus-target-branch" placeholder="nexus-to-artifactory/20260313-120000">
-                        <span class="hint">Leave empty for auto-generated name: nexus-to-artifactory/{timestamp}</span>
+                        <span class="hint">Leave empty for auto-generated name: nexus-to-artifactory/{timestamp}. Protected branches (master, main, develop, release) are not allowed.</span>
                     </div>
                     <details class="credentials-section">
                         <summary>Authentication (Optional)</summary>

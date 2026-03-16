@@ -160,6 +160,8 @@ public class RewriteConfigService {
             injectJaxwsApiDependency(doc, project);
         }
 
+        updateJdkVersionTags(doc, targetJavaVersion);
+
         Element existingRewrite = findPluginByArtifactId(plugins, "rewrite-maven-plugin");
         if (existingRewrite != null) {
             plugins.removeChild(existingRewrite);
@@ -201,6 +203,30 @@ public class RewriteConfigService {
         transformer.setOutputProperty("{http://xml.apache.org/xslt}indent-amount", "4");
         transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "no");
         transformer.transform(new DOMSource(doc), new StreamResult(new File(pomFile)));
+    }
+
+    /**
+     * Updates any bare {@code <jdk>} version-range elements (e.g. {@code [1.8,)}) found anywhere
+     * in the POM to use the target Java version range (e.g. {@code [17,)}).
+     * Leaf {@code <jdk>} nodes whose content matches a known Java version or range are updated;
+     * structured {@code <jdk>} blocks with child elements are left untouched.
+     */
+    private void updateJdkVersionTags(Document doc, String targetJavaVersion) {
+        NodeList jdkNodes = doc.getElementsByTagName("jdk");
+        for (int i = 0; i < jdkNodes.getLength(); i++) {
+            Node jdk = jdkNodes.item(i);
+            boolean hasElementChildren = false;
+            NodeList children = jdk.getChildNodes();
+            for (int j = 0; j < children.getLength(); j++) {
+                if (children.item(j) instanceof Element) { hasElementChildren = true; break; }
+            }
+            if (!hasElementChildren) {
+                String content = jdk.getTextContent().trim();
+                if (content.matches("\\[1\\.8,\\)|\\[8,\\)|\\[11,\\)|\\[17,\\)|1\\.8|8|11|17")) {
+                    jdk.setTextContent("[" + targetJavaVersion + ",)");
+                }
+            }
+        }
     }
 
     private void upgradeMavenCompilerPlugin(Document doc, Element plugins, String targetJavaVersion) {
