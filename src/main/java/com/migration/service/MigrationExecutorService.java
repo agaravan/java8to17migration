@@ -194,6 +194,23 @@ public class MigrationExecutorService {
             if (isWindows) candidates.add(wrapperAlt);
         }
 
+        // Strategy: scan every directory already on the PATH environment variable.
+        // This mirrors exactly what 'where mvn' / 'which mvn' does, so it works on
+        // any drive letter (C:\, D:\, F:\, etc.) as long as Maven's bin dir is in PATH.
+        for (String pathVar : new String[]{ "PATH", "Path" }) {
+            String pathEnv = System.getenv(pathVar);
+            if (pathEnv == null) continue;
+            for (String dir : pathEnv.split(isWindows ? ";" : ":")) {
+                if (dir == null || dir.isBlank()) continue;
+                String d = dir.trim();
+                if (isWindows) {
+                    candidates.add(d + "\\mvn.cmd");
+                    candidates.add(d + "\\mvn.bat");
+                }
+                candidates.add(d + File.separator + "mvn");
+            }
+        }
+
         if (isWindows) {
             for (String base : new String[]{
                     "C:\\Program Files\\Apache Software Foundation",
