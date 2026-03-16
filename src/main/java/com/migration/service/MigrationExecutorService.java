@@ -1,10 +1,13 @@
 package com.migration.service;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.BufferedReader;
+import java.io.File;
 import java.io.InputStreamReader;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
@@ -13,6 +16,14 @@ public class MigrationExecutorService {
 
     private static final String OPENREWRITE_PLUGIN_VERSION = "5.42.2";
     private static final String REWRITE_RECIPE_VERSION = "2.25.0";
+
+    /**
+     * Optional hard-coded path to the Maven executable, e.g.
+     * C:/tools/apache-maven-3.9.6/bin/mvn.cmd
+     * Leave empty to let the service auto-detect Maven.
+     */
+    @Value("${migration.maven.executable:}")
+    private String configuredMavenExecutable;
 
     public Map<String, Object> applyMigration(String projectPath, Map<String, Object> analysis, int targetVersion) {
         Map<String, Object> result = new LinkedHashMap<>();
@@ -145,13 +156,74 @@ public class MigrationExecutorService {
         return recipes;
     }
 
-    private String resolveMavenExecutable() {
+    /**
+     * Resolves the Maven executable using several strategies in order:
+     * 1. Explicit path configured via migration.maven.executable property
+     * 2. MAVEN_HOME / M2_HOME environment variables
+     * 3. Maven wrapper (mvnw / mvnw.cmd) in the project directory
+     * 4. Common Windows installation directories (Program Files, etc.)
+     * 5. Plain command name on the system PATH
+     */
+    private String resolveMavenExecutable(String projectPath) {
         String os = System.getProperty("os.name", "").toLowerCase();
         boolean isWindows = os.contains("win");
-        String[] candidates = isWindows
-                ? new String[]{ "mvn.cmd", "mvn.bat", "mvn" }
-                : new String[]{ "mvn", "mvn.cmd" };
+
+        List<String> candidates = new ArrayList<>();
+
+        if (configuredMavenExecutable != null && !configuredMavenExecutable.isBlank()) {
+            candidates.add(configuredMavenExecutable.trim());
+        }
+
+        for (String envVar : new String[]{ "MAVEN_HOME", "M2_HOME", "MVN_HOME" }) {
+            String home = System.getenv(envVar);
+            if (home != null && !home.isBlank()) {
+                if (isWindows) {
+                    candidates.add(home + "\\bin\\mvn.cmd");
+                    candidates.add(home + "\\bin\\mvn.bat");
+                }
+                candidates.add(home + "/bin/mvn");
+            }
+        }
+
+        if (projectPath != null) {
+            String wrapper = isWindows
+                    ? projectPath + File.separator + "mvnw.cmd"
+                    : projectPath + File.separator + "mvnw";
+            String wrapperAlt = projectPath + File.separator + "mvnw";
+            candidates.add(wrapper);
+            if (isWindows) candidates.add(wrapperAlt);
+        }
+
+        if (isWindows) {
+            for (String base : new String[]{
+                    "C:\\Program Files\\Apache Software Foundation",
+                    "C:\\Program Files\\Apache",
+                    "C:\\tools",
+                    "C:\\maven",
+                    System.getProperty("user.home", "C:\\Users\\Default") + "\\tools"
+            }) {
+                File dir = new File(base);
+                if (dir.isDirectory()) {
+                    File[] entries = dir.listFiles();
+                    if (entries != null) {
+                        Arrays.sort(entries, Comparator.reverseOrder());
+                        for (File entry : entries) {
+                            if (entry.isDirectory() && entry.getName().toLowerCase().contains("maven")) {
+                                candidates.add(entry.getAbsolutePath() + "\\bin\\mvn.cmd");
+                                candidates.add(entry.getAbsolutePath() + "\\bin\\mvn.bat");
+                            }
+                        }
+                    }
+                }
+            }
+            candidates.add("mvn.cmd");
+            candidates.add("mvn.bat");
+        }
+
+        candidates.add("mvn");
+
         for (String cmd : candidates) {
+            if (cmd == null || cmd.isBlank()) continue;
             try {
                 Process p = new ProcessBuilder(cmd, "--version").start();
                 boolean done = p.waitFor(5, TimeUnit.SECONDS);
@@ -163,7 +235,7 @@ public class MigrationExecutorService {
 
     private String runMaven(String projectPath, String recipeArg, List<String> warnings) {
         try {
-            String mvn = resolveMavenExecutable();
+            String mvn = resolveMavenExecutable(projectPath);
             List<String> command = new ArrayList<>();
             command.add(mvn);
             command.add(String.format("org.openrewrite.maven:rewrite-maven-plugin:%s:run", OPENREWRITE_PLUGIN_VERSION));
@@ -201,14 +273,18 @@ public class MigrationExecutorService {
 
         } catch (Exception e) {
             String errorMsg = e.getMessage();
+            String hint = "Set migration.maven.executable in application.properties to the full path of your mvn.cmd "
+                    + "(e.g. C:/tools/apache-maven-3.9.6/bin/mvn.cmd) so the service can find Maven even when "
+                    + "running as a Windows Service without Maven on the PATH.";
             if (errorMsg != null && errorMsg.contains("Cannot run program")) {
-                warnings.add("Maven is not available on this server. The pom.xml has been fully configured with OpenRewrite recipes. " +
-                        "Run 'mvn rewrite:run' in your local development environment to apply source code transformations.");
+                warnings.add("Maven could not be located on this server. The pom.xml has been fully configured with "
+                        + "OpenRewrite recipes and is ready to run. " + hint
+                        + " Alternatively, run 'mvn rewrite:run' manually in the cloned project directory.");
             } else {
-                warnings.add("Could not execute Maven automatically: " + errorMsg +
-                        ". The pom.xml has been configured - run 'mvn rewrite:run' in your local environment.");
+                warnings.add("Could not execute Maven automatically: " + errorMsg
+                        + ". The pom.xml has been configured. " + hint);
             }
-            return "Maven execution requires a local Maven installation. Run 'mvn rewrite:run' locally to apply transformations.";
+            return "Maven not found. Configure migration.maven.executable in application.properties with the full path to mvn.cmd.";
         }
     }
 
