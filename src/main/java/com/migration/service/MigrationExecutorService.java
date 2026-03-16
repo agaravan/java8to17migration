@@ -21,12 +21,14 @@ public class MigrationExecutorService {
     private static final String OPENREWRITE_PLUGIN_VERSION = "5.42.2";
     private static final String REWRITE_RECIPE_VERSION = "2.25.0";
 
+    /** Hard-coded Maven installation on the Windows Server — always tried first. */
+    private static final String MAVEN_HOME_WINDOWS = "F:\\Test\\Maven-3.9.6";
+
     /**
-     * Full path to the Maven executable.
-     * Defaults to F:\Test\Maven-3.9.6\bin\mvn.cmd (the server installation).
-     * Override in application.properties via migration.maven.executable=...
+     * Optional override via application.properties.
+     * If blank, MAVEN_HOME_WINDOWS is used.
      */
-    @Value("${migration.maven.executable:F:\\Test\\Maven-3.9.6\\bin\\mvn.cmd}")
+    @Value("${migration.maven.executable:}")
     private String configuredMavenExecutable;
 
     public Map<String, Object> applyMigration(String projectPath, Map<String, Object> analysis, int targetVersion) {
@@ -177,13 +179,19 @@ public class MigrationExecutorService {
 
         List<String> candidates = new ArrayList<>();
 
-        // --- Strategy 1: Configured property (highest priority) ---
+        // --- Strategy 0: Hard-coded server path (always tried first, baked into JAR) ---
+        candidates.add(MAVEN_HOME_WINDOWS + "\\bin\\mvn.cmd");
+        candidates.add(MAVEN_HOME_WINDOWS + "\\bin\\mvn.bat");
+        candidates.add(MAVEN_HOME_WINDOWS + "/bin/mvn");
+        log.info("Strategy 0 - Hard-coded server path: {}\\bin\\mvn.cmd", MAVEN_HOME_WINDOWS);
+
+        // --- Strategy 1: Configured property override via application.properties ---
         if (configuredMavenExecutable != null && !configuredMavenExecutable.isBlank()) {
             String configured = configuredMavenExecutable.trim();
-            candidates.add(configured);
-            log.info("Strategy 1 - Configured property path: {}", configured);
+            candidates.add(0, configured);
+            log.info("Strategy 1 - Overriding with configured property path: {}", configured);
         } else {
-            log.warn("Strategy 1 - migration.maven.executable is not set in application.properties");
+            log.info("Strategy 1 - No migration.maven.executable override set; using hard-coded path");
         }
 
         // --- Strategy 2: MAVEN_HOME / M2_HOME / MVN_HOME environment variables ---
