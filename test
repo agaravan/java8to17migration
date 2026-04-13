@@ -1,0 +1,108 @@
+Hi, I would like to create a PPT for my client visit to expose my DevOps Road map and Vulnerabilities action plan. Kindly find below inputs and prepare a PPT content to present. Please add the good picture and automation plans if any add roadmaps to show its future plan.
+
+I’m DevOps team from Nordea, Dompap applications. Its Document process and Signing Nordea. This project is having source code in Bitbucket and Jenkins integrated to Build and Deploy to Windows server where all application running as services using Utility service help of Next Node services. The Whole deployment process is manual only, No CI/CD available in project.
+
+1.	Database Organizing – There are many Database supported to and many breached out of size issue, DevOps working to find solution to mitigate this plan by new indexes and additional  
+DOMPAP	NXPPDK	Dev	BSPP
+	NXPPDK	Test	BSPP
+	NXPPDK	Dev	BSPPA
+	NXPPDK	Test	BSPPA
+	NXPPDK	Test	BSPPB
+	NXPPDK	Test	BSPPX
+
+2.	Application Health check monitoring
+3.	Daily Issue monitoring and track until it closure from dedicated site of DevOps - Dompap Pending User requests (For Jira users only) - Group Digital - Nordea Confluence
+4.	Access Management and creating automation to remove existing user removal and new user addition.
+5.	Daily Deployments issues and 
+6.	BitBucket Repo Management
+7.	New features support such as Bank ID and Maskingportens
+8.	Existing feature bugs initial analysis
+9.	Sharepoint sites management
+10.	New service onboarding (End to End – From Repo creation to ensure the service running in server such as Service account management, Ninaa group management, Certificates management, Proxy whitelisting, Load Balancer creation  etc.,)
+11.	Elastic, Kibana management and upgrade plan
+12.	Splunk Management
+13.	Application Logs Management
+14.	Jenkins Server and services management
+
+Vulnerabilities:
+
+1.	Java Upgrade – Using Java Upgrade tool (Which created by DevOps team) we migrated around 20+ services, Total Vulnerabilites 600+
+Row Labels	Count 
+Apache Log4j Remote Code Execution (RCE) Vulnerability (CVE-2021-45046) (Log4Shell)	4
+Apache Log4j Remote Code Execution (RCE) Vulnerability (Log4Shell)	4
+Elastic NV Denial of Service (DoS) Vulnerability (ESA-2024-06)	4
+EOL/Obsolete Software: Node.js 10.x Detected	1
+Git Multiple Security Vulnerabilities	2
+IBM Tivoli Monitoring Heap Based Overflow Vulnerability (7241472)	21
+IBM Tivoli Monitoring Improper Validation Vulnerability (7234923)	1
+IBM Tivoli Monitoring Multiple Security Vulnerabilities (7237173)	21
+Java Debug Wire Protocol Remote Code Execution Vulnerability	1
+Jenkins Core Remote Code Execution (RCE) Vulnerability (SECURITY-3314)	1
+Jenkins Multiple Security Vulnerabilities (SECURITY-3030, SECURITY-2120)	1
+Jenkins Multiple Security Vulnerabilities (SECURITY-3135)	1
+Microsoft Edge Based on Chromium Prior to 140.0.3485.81 Multiple Vulnerabilities	9
+Microsoft Edge Based on Chromium Prior to 140.0.3485.94 Multiple Vulnerabilities	11
+Microsoft Edge Based on Chromium Prior to 141.0.3537.57 Multiple Vulnerabilities	13
+Microsoft Office Security Update for December 2025	2
+Microsoft Office Security Update for January 2026	2
+Microsoft Office Security Update for November 2025	2
+Microsoft Visual C++ Redistributable Installer Elevation of Privilege Vulnerability	15
+Microsoft Visual Studio Active Template Library Remote Code Execution (MS09-035)	1
+Microsoft Windows Server Security Update for January 2026	1
+Node.js Bypass Path Traversal Vulnerability (CVE-2025-27210)	1
+Node.js Command Injection Flaw Vulnerability (CVE-2024-36138)	1
+Node.js Command Injection Vulnerability	1
+Node.js Multiple Security Vulnerabilities	1
+Node.js Multiple Vulnerabilities	1
+Node.js Permission Bypass Vulnerability (CVE-2025-23083)	1
+Node.js Security Releases (CVE-2025-23166)	1
+Notepad++ Updater Hijacking Vulnerability	6
+Oracle Java SE Critical Patch Update - April 2017	8
+Oracle Java SE Critical Patch Update - April 2018	8
+Oracle Java SE Critical Patch Update - April 2019	8
+Oracle Java SE Critical Patch Update - April 2020	8
+Oracle Java SE Critical Patch Update - January 2017	8
+Oracle Java SE Critical Patch Update - January 2018	8
+Oracle Java SE Critical Patch Update - January 2020	8
+Oracle Java SE Critical Patch Update - July 2016	8
+Oracle Java SE Critical Patch Update - July 2017	8
+Oracle Java SE Critical Patch Update - July 2018	8
+Oracle Java SE Critical Patch Update - July 2020(CPUJUL2020)	8
+Oracle Java SE Critical Patch Update - July 2021 (CPUJUL2021)	8
+Oracle Java SE Critical Patch Update - October 2016	8
+Oracle Java SE Critical Patch Update - October 2017	8
+Oracle Java SE Critical Patch Update - October 2018	8
+Oracle Java SE Critical Patch Update - October 2019	8
+Oracle Java SE Critical Patch Update - October 2021 (CPUOCT2021)	8
+Oracle Java Standard Edition (SE) Critical Patch Update - April 2022 (CPUAPR2022)	7
+Oracle Java Standard Edition (SE) Critical Patch Update - April 2023 (CPUAPR2023)	17
+Oracle Java Standard Edition (SE) Critical Patch Update - April 2024 (CPUAPR2024)	8
+Oracle Java Standard Edition (SE) Critical Patch Update - April 2025 (CPUAPR2025)	17
+Oracle Java Standard Edition (SE) Critical Patch Update - January 2024 (CPUJAN2024)	8
+Oracle Java Standard Edition (SE) Critical Patch Update - January 2026 (CPUJAN2026)	17
+Oracle Java Standard Edition (SE) Critical Patch Update - July 2022 (CPUJUL2022)	17
+Oracle Java Standard Edition (SE) Critical Patch Update - July 2023 (CPUJUL2023)	8
+Oracle Java Standard Edition (SE) Critical Patch Update - July 2024 (CPUJUL2024)	8
+Oracle Java Standard Edition (SE) Critical Patch Update - July 2025 (CPUJUL2025)	17
+Oracle Java Standard Edition (SE) Critical Patch Update - October 2024 (CPUOCT2024)	8
+Oracle Java Standard Edition (SE) Critical Patch Update - October 2025 (CPUOCT2025)	17
+Red Hat Update for container-tools:rhel8 (RHSA-2026:0753)	1
+Red Hat Update for cups (RHSA-2025:15702)	4
+Red Hat Update for glib2 (RHSA-2026:0991)	4
+Red Hat Update for gnupg2 (RHSA-2026:0728)	4
+Red Hat Update for java-1.8.0-Open Java Development Toolkit (OpenJDK) (RHSA-2026:0932)	1
+Red Hat Update for kernel (RHSA-2025:15008)	3
+Red Hat Update for kernel (RHSA-2025:15471)	3
+Red Hat Update for kernel (RHSA-2025:15785)	3
+Red Hat Update for kernel (RHSA-2025:16372)	3
+Red Hat Update for kernel (RHSA-2025:16919)	3
+Red Hat Update for kernel (RHSA-2026:0444)	4
+Red Hat Update for kernel (RHSA-2026:0759)	4
+Red Hat Update for kernel (RHSA-2026:1142)	4
+Red Hat Update for libpng (RHSA-2026:0241)	4
+Red Hat Update for libsoup (RHSA-2026:0421)	1
+Red Hat Update for Open Secure Sockets Layer (OpenSSL) (RHSA-2026:0337)	4
+Red Hat Update for python3.11 (RHSA-2026:1374)	4
+VMware Tools Improper Authorization Vulnerability (VMSA-2025-0015)	16
+Grand Total	486
+2.	Kindly prepare road map plan to fix vulnerabilities with details.
